@@ -282,9 +282,9 @@ return to question 3 with the count intact.
 Once A–F pass:
 
 ```bash
-cd ~/Desktop/math_tutor
+cd /path/to/math-tutor
 flutter build web --base-href /
-open ~/Desktop/math_tutor/build/web
+open build/web
 ```
 
 Drag the **`web`** folder to Netlify → Deploys. Then **Cmd+Shift+R** on the

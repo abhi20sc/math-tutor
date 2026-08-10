@@ -121,7 +121,7 @@ answers, so the entry tier must not punish a student for tapping one.
 ## 7. Running the thing
 
 ```bash
-cd ~/Desktop/math_tutor
+cd /path/to/math-tutor
 flutter run -d chrome          # local, 2-3 min first build
 flutter build web --base-href /   # then drag build/web to Netlify
 ```
@@ -200,8 +200,7 @@ select id, 'teacher' from auth.users where email = 'uncle@example.com';
 ## 10. Environment (macOS) — hard-won, read before debugging
 
 **Machine:** Apple Silicon, macOS 26.5.2, Flutter 3.44.8 via Homebrew at
-`/opt/homebrew/share/flutter`. Project at `~/Desktop/math_tutor`. Platform
-folders deleted — web only.
+`/opt/homebrew/share/flutter`. Platform folders deleted — web only.
 
 **The big one:** roughly six hours were lost to *silent hangs with zero error
 output* on every `flutter` command. Root cause was the machine being out of
