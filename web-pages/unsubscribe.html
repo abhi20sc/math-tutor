@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stop receiving reports — Math Tutor</title>
+<!--
+  =========================================================================
+  UNSUBSCRIBE PAGE
+  =========================================================================
+  Put this file in the folder you drag to Netlify, alongside index.html, and
+  name it exactly:  unsubscribe.html
+  Netlify serves it at /unsubscribe, which is the address in every email.
+
+  BEFORE DEPLOYING: set SUPABASE_URL and SUPABASE_KEY at the bottom. Use the
+  publishable key, the same one that is already in main.dart. It is safe here
+  for the same reason it is safe there — it grants nothing on its own.
+
+  Two things this page gets right that most unsubscribe pages do not:
+
+  It works without an account. A guardian clicks a link in an email; the
+  token in that link is the whole authentication. Asking somebody to sign in
+  to stop receiving mail about their own child is not a real opt-out.
+
+  It works on the first click. No confirmation step, no "are you sure", no
+  preferences page. The click IS the decision. Anything else is a dark
+  pattern, and under CASL an unsubscribe has to be straightforward.
+-->
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F6F5F1;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica,
+                 Arial, sans-serif;
+    color: #1E2422;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 6px 20px rgba(30,36,34,.06), 0 1px 2px rgba(30,36,34,.04);
+    max-width: 460px;
+    width: 100%;
+    padding: 38px 34px 34px;
+    text-align: center;
+  }
+  .mark {
+    width: 44px; height: 44px; margin: 0 auto 20px;
+    background: #2F6F62; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-family: Georgia, serif; font-style: italic;
+    font-size: 23px;
+  }
+  h1 {
+    margin: 0 0 10px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 25px; font-weight: 600; letter-spacing: -.3px;
+  }
+  p { margin: 0 0 14px; font-size: 14.5px; line-height: 1.6; color: #6E7772; }
+  .ok { color: #2F6F62; font-weight: 600; }
+  .bad { color: #C0392B; font-weight: 600; }
+  .spinner {
+    width: 26px; height: 26px; margin: 8px auto 18px;
+    border: 3px solid #E2E0D9; border-top-color: #2F6F62;
+    border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .note {
+    margin-top: 22px; padding-top: 18px; border-top: 1px solid #E2E0D9;
+    font-size: 12px; color: #8A918D; line-height: 1.55;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="mark">x</div>
+  <div id="body">
+    <div class="spinner"></div>
+    <p>One moment…</p>
+  </div>
+</div>
+
+<script>
+  // ---- SET THESE TWO ----------------------------------------------------
+  const SUPABASE_URL = 'https://frkswzowskeqmgdrrwab.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_QGTakKcrvWfpTL3SRiT9uQ_mpxnP6Fn';
+  // -----------------------------------------------------------------------
+
+  const box = document.getElementById('body');
+  const token = new URLSearchParams(location.search).get('token');
+
+  function show(html) { box.innerHTML = html; }
+
+  if (!token) {
+    show(`<h1>Link incomplete</h1>
+          <p>This address is missing the part that identifies which list to
+          change. Open the link straight from the email rather than typing
+          it, or reply to whoever sent it.</p>`);
+  } else {
+    // revoke_report_recipient is callable without an account on purpose:
+    // guardians do not have one. The token is what authorises it.
+    fetch(`${SUPABASE_URL}/rest/v1/rpc/revoke_report_recipient`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`
+      },
+      body: JSON.stringify({ p_token: token })
+    })
+      .then(r => r.json())
+      .then(result => {
+        if (result === true) {
+          show(`<h1>Done</h1>
+                <p class="ok">You will not receive any more reports.</p>
+                <p>Nothing else changes. The student keeps their account and
+                their progress, and they can see that you have been removed
+                from their list.</p>
+                <p>If you change your mind, ask them to add you again — it
+                will come back here for you to confirm.</p>`);
+        } else {
+          show(`<h1>Already done</h1>
+                <p>This link has been used, or the list it pointed at no
+                longer exists. Either way, no reports are being sent to this
+                address.</p>`);
+        }
+      })
+      .catch(() => {
+        show(`<h1>Something went wrong</h1>
+              <p class="bad">We could not reach the server.</p>
+              <p>Try the link again in a minute. If it keeps failing, reply
+              to the email and we will remove you by hand.</p>`);
+      });
+  }
+</script>
+
+<div style="position:fixed;bottom:14px;left:0;right:0;text-align:center;
+            font-family:-apple-system,Helvetica,Arial,sans-serif;
+            font-size:11px;color:#9AA09C;">
+  Math Tutor
+</div>
+
+</body>
+</html>
