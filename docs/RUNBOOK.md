@@ -81,7 +81,7 @@ All four must be `1`.
 | `lessons_mcv4u.sql` | 36 | 136 KB |
 | `lessons_mdm4u.sql` | 30 | 132 KB |
 
-Six files rather than the one 787 KB `lessons_all.sql`, because the editor
+Six files rather than the one 787 KB `bundles/lessons_all.sql`, because the editor
 struggled with a file that size last time. Each one deletes and reloads only
 its own course, so re-running one is safe and does not touch the others.
 

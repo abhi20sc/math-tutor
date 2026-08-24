@@ -23,7 +23,7 @@
 -- RUN ORDER, from a clean project
 -- ---------------------------------------------------------------------------
 --   1. this file                     the schema, every function, every policy
---   2. questions_all.sql             all 1600 questions and all 60 figures,
+--   2. bundles/questions_all.sql             all 1600 questions and all 60 figures,
 --                                    six courses, in one run
 --
 -- That is the whole installation. There is no step 3.

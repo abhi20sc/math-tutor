@@ -27,7 +27,7 @@
 --   the first, I7/I8/T6/T8/T9 for the second.
 --
 -- VERIFIED 23 August 2026 on a clean database built from
--- astro_math_assist_setup.sql + questions_all.sql:
+-- astro_math_assist_setup.sql + bundles/questions_all.sql:
 --   55 / 55  tests/test_sections.sql
 --  212 / 212 tests/test_ama.sql   (unchanged by this migration)
 -- ===========================================================================

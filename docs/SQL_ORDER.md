@@ -39,12 +39,12 @@ test against.
 | # | File | Size | Why here |
 |---|---|---|---|
 | 1 | `astro_math_assist_setup.sql` | 159 KB | Every table, policy, function, the avatar bucket, the admin drill-down. Nothing works before this. |
-| 2 | `questions_all.sql` | 1.2 MB | 1,600 questions and 60 figures |
+| 2 | `bundles/questions_all.sql` | 1.2 MB | 1,600 questions and 60 figures |
 | 3 | `astro_sections.sql` | 62 KB | Learn / Improve / Test / preferences |
 | 4–9 | the six `lessons/*.sql` | 76–149 KB | 219 lessons |
 
 **If the editor chokes on the 1.2 MB file at step 2**, use the six in
-`by_course/` instead — same content, one course each, any order:
+`bundles/by_course/` instead — same content, one course each, any order:
 
 ```
 questions_grade09_mth1w.sql   360 questions   242 KB
@@ -74,7 +74,7 @@ load the per-unit files by hand.
 
 ## Grade 12 Calculus and Vectors, on its own
 
-`by_course/questions_grade12_mcv4u.sql` — 201 KB, **240 questions, 6 units,
+`bundles/by_course/questions_grade12_mcv4u.sql` — 201 KB, **240 questions, 6 units,
 12 figures**, the most of any course, because vectors are the one topic where
 the arrangement of the arrows *is* the question.
 
