@@ -233,7 +233,7 @@ any wrong-option feedback that literally contains the correct option text.
 
 ## What happens on your side
 
-1. Run `supabase_full_setup.sql` first if it has changed (it creates the
+1. Run `astro_math_assist_setup.sql` first if it has changed (it creates the
    labels table), then the questions file in the SQL editor
 2. The units appear in the app immediately — no deploy
 3. Delete the sample unit once the real bank is in:

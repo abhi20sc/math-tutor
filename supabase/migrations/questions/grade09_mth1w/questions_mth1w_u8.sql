@@ -21,7 +21,7 @@
 -- frequency table instead of weighting them, subtracting the quartiles the
 -- wrong way round, and reading a correlation as a cause.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================

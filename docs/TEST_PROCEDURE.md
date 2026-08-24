@@ -62,7 +62,7 @@ lesson.
 
 1. Sign in as the tutor. Open the class. **Write down how many students are on
    the roster and their names.**
-2. In the Supabase SQL editor, run `supabase_full_setup.sql` again, then
+2. In the Supabase SQL editor, run `astro_math_assist_setup.sql` again, then
    `questions_grade10.sql` again. (Yes, on your live database. That is the
    point — this is exactly what you will do on every future update.)
 3. **Do not sign in as any student.** Go straight back to the tutor's already-open

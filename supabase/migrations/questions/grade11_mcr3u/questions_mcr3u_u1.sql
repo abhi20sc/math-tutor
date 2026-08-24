@@ -15,7 +15,7 @@
 -- Every wrong option is the answer a student actually reaches by one named
 -- mistake. Feedback names that mistake and stops there.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.

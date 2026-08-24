@@ -23,7 +23,7 @@
 --   * k does not scale the graph by k, it scales by 1/k. A student who reads
 --     f(2x) as a stretch by 2 has it exactly backwards.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.

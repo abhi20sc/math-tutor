@@ -42,7 +42,7 @@
 -- that would use one are asked from the equation instead, which is what a
 -- student has to be able to do anyway.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcv4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcv4u.sql.
 -- The figure file wipes and re-attaches the whole course, so it must be
 -- re-run after any re-run of this one even though this unit has no figures
 -- of its own. Student attempts (keyed on course, unit and sort_order)

@@ -16,7 +16,7 @@
 -- product in FOIL, and reading the degree of a polynomial off a single
 -- exponent instead of the sum on the highest term.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================

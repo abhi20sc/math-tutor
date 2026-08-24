@@ -51,7 +51,7 @@
 -- the conclusion, or giving the equation and asking for the shape. That is
 -- the same skill run in the direction that cannot be read off a drawing.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -452,7 +452,7 @@ values
 -- form and the end behaviour instead, which is the reasoning the sign chart
 -- is a shorthand for.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -857,7 +857,7 @@ values
 -- curve on a grid, and the domain, the asymptote and the intercept — which
 -- is most of what the questions ask — can be read straight off it.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -1260,7 +1260,7 @@ values
 -- a grid, and a grid states the period, the asymptotes and the amplitude
 -- outright; those are asked from key values instead.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mhf4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mhf4u.sql.
 -- The figure file must come second, because the delete below clears the
 -- figure column along with the rest of each row.
 --
@@ -1667,7 +1667,7 @@ values
 -- Nothing else here earns one. Identities are symbolic, and the solving
 -- questions would need a CAST diagram, which states which quadrants to use.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mhf4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mhf4u.sql.
 --
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- Easy and Medium are free; Challenge and Advanced need Astro+.
@@ -2064,7 +2064,7 @@ values
 -- of those is asked here from the coordinates or the table instead, which is
 -- what a student has to be able to do anyway once the picture is taken away.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -2476,7 +2476,7 @@ values
 -- Every question here is asked from the equation instead, which is what a
 -- student has to be able to do once the picture is taken away.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.

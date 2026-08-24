@@ -41,7 +41,7 @@
 -- Nothing else here earns one. Identities are symbolic, and the solving
 -- questions would need a CAST diagram, which states which quadrants to use.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mhf4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mhf4u.sql.
 --
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- Easy and Medium are free; Challenge and Advanced need Astro+.

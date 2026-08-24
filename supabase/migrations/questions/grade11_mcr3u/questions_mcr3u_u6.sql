@@ -35,7 +35,7 @@
 -- can state. Every other question in this unit is about a curve, and a
 -- picture of the curve would do the work.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcr3u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcr3u.sql.
 -- The figure file must come second, because the delete below clears the
 -- figure column along with the rest of each row.
 --

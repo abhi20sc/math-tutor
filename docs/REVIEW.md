@@ -193,7 +193,7 @@ retrofit and they are right:
   the address the Resend account was registered with. A domain is needed
   before any real guardian can receive anything — see the handoff.
 - **Grade 9 has no hard questions**, so MTH1W ramps and then stops.
-- **`supabase_full_setup.sql` rebuilds `profiles`**, so after any re-run every
+- **`astro_math_assist_setup.sql` rebuilds `profiles`**, so after any re-run every
   student must sign in once before they appear on a roster. Caught this the
   hard way.
 - **No automated tests.** The SQL has been exercised against a real Postgres;

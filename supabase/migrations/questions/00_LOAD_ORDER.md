@@ -222,7 +222,7 @@ when the unit is clean.
 ```bash
 dropdb --if-exists ama && createdb ama
 psql -d ama -f tests/00_supabase_stub.sql
-psql -d ama -f supabase/migrations/supabase_full_setup.sql
+psql -d ama -f supabase/migrations/astro_math_assist_setup.sql
 psql -d ama -f supabase/migrations/questions/grade12_mdm4u/questions_mdm4u_u5.sql
 psql -d ama -v course=MDM4U -v unit='Probability Distributions' -f tools/check_questions.sql
 ```

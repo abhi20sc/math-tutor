@@ -38,7 +38,7 @@
 -- picture at all: sequences and series are lists of numbers, and printing
 -- the list further than the question does hands over the answer.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcr3u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcr3u.sql.
 -- The figure file must come second, because the delete below clears the
 -- figure column along with the rest of each row.
 --

@@ -35,14 +35,14 @@ mistakes, hiding the hint below the fold — is a bug, not a preference.
 | File | What |
 |---|---|
 | `lib/main.dart` | The whole app, one file, heavily commented |
-| `supabase/migrations/supabase_full_setup.sql` | Every table, policy and function |
-| `supabase/migrations/questions_grade10.sql` | The 240 Grade 10 questions |
+| `supabase/migrations/astro_math_assist_setup.sql` | Every table, policy and function |
+| `supabase/migrations/questions/grade10_mpm2d/questions_grade10.sql` | The 240 Grade 10 questions |
 | `tests/test_ama.sql` | The SQL suite. 62 checks, asserts rather than prints |
 
 Run order from a clean project: setup, then questions, then re-grant admin,
 then replace `lib/main.dart` and build.
 
-**⚠ `supabase_full_setup.sql` drops and rebuilds `questions`, `profiles` and
+**⚠ `astro_math_assist_setup.sql` drops and rebuilds `questions`, `profiles` and
 `staff_roles`.** Re-running it wipes the question bank, every student's grade,
 and every teacher role. It does NOT drop attempts, resets or mastery, so
 student history survives. Always reload the questions file afterwards, and
@@ -174,8 +174,8 @@ The SQL suite needs a local Postgres, never the live project:
 ```bash
 dropdb --if-exists ama && createdb ama
 psql -d ama -f tests/00_supabase_stub.sql
-psql -d ama -f supabase/migrations/supabase_full_setup.sql
-psql -d ama -f supabase/migrations/questions_grade10.sql
+psql -d ama -f supabase/migrations/astro_math_assist_setup.sql
+psql -d ama -f supabase/migrations/questions/grade10_mpm2d/questions_grade10.sql
 psql -d ama -f tests/test_ama.sql
 ```
 

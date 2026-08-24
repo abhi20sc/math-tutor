@@ -26,8 +26,8 @@ fixture users and would leave them there.
 ```bash
 dropdb --if-exists ama && createdb ama
 psql -d ama -f tests/00_supabase_stub.sql
-psql -d ama -f supabase/migrations/supabase_full_setup.sql
-psql -d ama -f supabase/migrations/questions_grade10.sql
+psql -d ama -f supabase/migrations/astro_math_assist_setup.sql
+psql -d ama -f supabase/migrations/questions/grade10_mpm2d/questions_grade10.sql
 psql -d ama -f tests/test_ama.sql
 ```
 

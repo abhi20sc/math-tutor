@@ -23,7 +23,7 @@
 -- (their own answer keys correct it later) and those omissions are used
 -- here as distractors rather than as answers.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.

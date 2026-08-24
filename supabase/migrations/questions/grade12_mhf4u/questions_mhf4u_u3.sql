@@ -38,7 +38,7 @@
 -- curve on a grid, and the domain, the asymptote and the intercept — which
 -- is most of what the questions ask — can be read straight off it.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.

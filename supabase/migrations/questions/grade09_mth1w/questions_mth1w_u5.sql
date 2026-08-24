@@ -22,7 +22,7 @@
 -- negative when taking a reciprocal, and reading the x-intercept off the
 -- wrong axis.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================

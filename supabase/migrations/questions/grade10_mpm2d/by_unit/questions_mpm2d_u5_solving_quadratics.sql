@@ -7,7 +7,7 @@
 -- and running the second one was easy to forget — which showed up as
 -- questions that reference a diagram nobody can see. They are one file now.
 --
--- RUN ORDER:  supabase_full_setup.sql  ->  this file.
+-- RUN ORDER:  astro_math_assist_setup.sql  ->  this file.
 --
 -- Safe to re-run on its own at any time: each unit is deleted and reinserted,
 -- and the figures are reattached at the end. Student attempts are NOT touched

@@ -36,7 +36,7 @@
 -- a grid, and a grid states the period, the asymptotes and the amplitude
 -- outright; those are asked from key values instead.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mhf4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mhf4u.sql.
 -- The figure file must come second, because the delete below clears the
 -- figure column along with the rest of each row.
 --

@@ -36,7 +36,7 @@
 -- step that gets skipped, the rule from the previous lesson applied to this
 -- one. Feedback names that mistake and stops there.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -430,7 +430,7 @@ order by min(sort_order);
 -- that the exponent on a product lands on the COEFFICIENT as well as the
 -- variable.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -810,7 +810,7 @@ group by difficulty order by min(sort_order);
 -- product in FOIL, and reading the degree of a polynomial off a single
 -- exponent instead of the sum on the highest term.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -1194,7 +1194,7 @@ group by difficulty order by min(sort_order);
 -- the one this unit is really about — failing to REVERSE an inequality after
 -- dividing by a negative.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -1581,7 +1581,7 @@ group by difficulty order by min(sort_order);
 -- negative when taking a reciprocal, and reading the x-intercept off the
 -- wrong axis.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -1966,7 +1966,7 @@ group by difficulty order by min(sort_order);
 -- strict inequality, and shading the side the test point is on when the test
 -- came out false.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -2349,7 +2349,7 @@ group by difficulty order by min(sort_order);
 -- centre of a circle, adding the two legs instead of their squares, and
 -- returning the surface area when the question asked for volume.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -2734,7 +2734,7 @@ group by difficulty order by min(sort_order);
 -- frequency table instead of weighting them, subtracting the quartiles the
 -- wrong way round, and reading a correlation as a cause.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -3119,7 +3119,7 @@ group by difficulty order by min(sort_order);
 -- the current one, and dividing a loan principal by the number of payments
 -- as though borrowing were free.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================

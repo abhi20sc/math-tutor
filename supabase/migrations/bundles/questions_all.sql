@@ -66,7 +66,7 @@
 -- step that gets skipped, the rule from the previous lesson applied to this
 -- one. Feedback names that mistake and stops there.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -460,7 +460,7 @@ order by min(sort_order);
 -- that the exponent on a product lands on the COEFFICIENT as well as the
 -- variable.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -840,7 +840,7 @@ group by difficulty order by min(sort_order);
 -- product in FOIL, and reading the degree of a polynomial off a single
 -- exponent instead of the sum on the highest term.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -1224,7 +1224,7 @@ group by difficulty order by min(sort_order);
 -- the one this unit is really about — failing to REVERSE an inequality after
 -- dividing by a negative.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -1611,7 +1611,7 @@ group by difficulty order by min(sort_order);
 -- negative when taking a reciprocal, and reading the x-intercept off the
 -- wrong axis.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -1996,7 +1996,7 @@ group by difficulty order by min(sort_order);
 -- strict inequality, and shading the side the test point is on when the test
 -- came out false.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -2379,7 +2379,7 @@ group by difficulty order by min(sort_order);
 -- centre of a circle, adding the two legs instead of their squares, and
 -- returning the surface area when the question asked for volume.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -2764,7 +2764,7 @@ group by difficulty order by min(sort_order);
 -- frequency table instead of weighting them, subtracting the quartiles the
 -- wrong way round, and reading a correlation as a cause.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -3149,7 +3149,7 @@ group by difficulty order by min(sort_order);
 -- the current one, and dividing a loan principal by the number of payments
 -- as though borrowing were free.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own.
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- No apostrophes anywhere in any string.
 -- ===========================================================================
@@ -3526,7 +3526,7 @@ group by difficulty order by min(sort_order);
 -- and running the second one was easy to forget — which showed up as
 -- questions that reference a diagram nobody can see. They are one file now.
 --
--- RUN ORDER:  supabase_full_setup.sql  ->  this file.
+-- RUN ORDER:  astro_math_assist_setup.sql  ->  this file.
 --
 -- Safe to re-run on its own at any time: each unit is deleted and reinserted,
 -- and the figures are reattached at the end. Student attempts are NOT touched
@@ -4606,7 +4606,7 @@ select unit, sort_order, figure from questions
 -- Every wrong option is the answer a student actually reaches by one named
 -- mistake. Feedback names that mistake and stops there.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -5007,7 +5007,7 @@ values
 -- (their own answer keys correct it later) and those omissions are used
 -- here as distractors rather than as answers.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -5401,7 +5401,7 @@ values
 --   * k does not scale the graph by k, it scales by 1/k. A student who reads
 --     f(2x) as a stretch by 2 has it exactly backwards.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -5798,7 +5798,7 @@ values
 -- made the single most expensive error in the unit, and it is the same error
 -- whether the context is a population, a half-life or a bank balance.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -6216,7 +6216,7 @@ values
 -- ruler test on each: what a student measuring the drawing computes must land
 -- nearest a WRONG option.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcr3u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcr3u.sql.
 -- The figure file must come second, because the delete below clears the
 -- figure column along with the rest of each row.
 --
@@ -6618,7 +6618,7 @@ values
 -- can state. Every other question in this unit is about a curve, and a
 -- picture of the curve would do the work.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcr3u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcr3u.sql.
 -- The figure file must come second, because the delete below clears the
 -- figure column along with the rest of each row.
 --
@@ -7022,7 +7022,7 @@ values
 -- picture at all: sequences and series are lists of numbers, and printing
 -- the list further than the question does hands over the answer.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcr3u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcr3u.sql.
 -- The figure file must come second, because the delete below clears the
 -- figure column along with the rest of each row.
 --
@@ -7463,7 +7463,7 @@ select unit, sort_order, figure from questions
 -- the conclusion, or giving the equation and asking for the shape. That is
 -- the same skill run in the direction that cannot be read off a drawing.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -7864,7 +7864,7 @@ values
 -- form and the end behaviour instead, which is the reasoning the sign chart
 -- is a shorthand for.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -8269,7 +8269,7 @@ values
 -- curve on a grid, and the domain, the asymptote and the intercept — which
 -- is most of what the questions ask — can be read straight off it.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -8672,7 +8672,7 @@ values
 -- a grid, and a grid states the period, the asymptotes and the amplitude
 -- outright; those are asked from key values instead.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mhf4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mhf4u.sql.
 -- The figure file must come second, because the delete below clears the
 -- figure column along with the rest of each row.
 --
@@ -9079,7 +9079,7 @@ values
 -- Nothing else here earns one. Identities are symbolic, and the solving
 -- questions would need a CAST diagram, which states which quadrants to use.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mhf4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mhf4u.sql.
 --
 -- Levels: 1-10 Easy, 11-20 Medium, 21-30 Challenge, 31-40 Advanced.
 -- Easy and Medium are free; Challenge and Advanced need Astro+.
@@ -9476,7 +9476,7 @@ values
 -- of those is asked here from the coordinates or the table instead, which is
 -- what a student has to be able to do anyway once the picture is taken away.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -9888,7 +9888,7 @@ values
 -- Every question here is asked from the equation instead, which is what a
 -- student has to be able to do once the picture is taken away.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. Safe to re-run on its own
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. Safe to re-run on its own
 -- at any time; the delete at the top makes a corrected copy replace the unit
 -- cleanly, and student attempts (keyed on course, unit and sort_order)
 -- survive the reload.
@@ -10334,7 +10334,7 @@ select unit, sort_order, figure from questions
 -- entirely, which is the whole skill the unit is teaching. Every tangent
 -- question here is asked from the equation.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcv4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcv4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -10757,7 +10757,7 @@ values
 -- is the answer sheet for the unit. Every question about a specific
 -- function here is asked from the equation.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcv4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcv4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -11170,7 +11170,7 @@ values
 -- that would use one are asked from the equation instead, which is what a
 -- student has to be able to do anyway.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcv4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcv4u.sql.
 -- The figure file wipes and re-attaches the whole course, so it must be
 -- re-run after any re-run of this one even though this unit has no figures
 -- of its own. Student attempts (keyed on course, unit and sort_order)
@@ -11596,7 +11596,7 @@ values
 -- refuses to write either PNG if the measured value ever drifts nearest to
 -- the correct option.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcv4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcv4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -12023,7 +12023,7 @@ values
 -- Rejected: a 3-space axis diagram with a vector drawn on it. The
 -- components are countable off the axes, which is the whole question.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcv4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcv4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -12450,7 +12450,7 @@ values
 -- a drawing of the words "they cross in a line". Every intersection
 -- question here is asked from the equations.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcv4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcv4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -12940,7 +12940,7 @@ select unit, sort_order, figure from questions
 -- them. Every question that would have used one is asked from the list of
 -- data instead.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mdm4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mdm4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -13357,7 +13357,7 @@ values
 -- eye picks big rectangles, and a student answering on a phone would just
 -- be told that in the prompt.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. The figure file for this
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. The figure file for this
 -- course does not touch this unit, but it wipes and re-attaches the whole
 -- of MDM4U, so it should still be re-run after any reload here.
 --
@@ -13782,7 +13782,7 @@ values
 -- side of the mean the question is about, and getting that side right is
 -- most of what the z-score questions test.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mdm4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mdm4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -14209,7 +14209,7 @@ values
 -- Also rejected: tree diagrams. A drawn tree with the branch probabilities
 -- written on it has already done the work; building the tree IS the skill.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mdm4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mdm4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -14641,7 +14641,7 @@ values
 -- Also rejected: Pascal triangle diagrams. Printing the triangle answers
 -- every coefficient question in the unit by inspection.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mdm4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mdm4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive

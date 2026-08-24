@@ -44,7 +44,7 @@
 -- entirely, which is the whole skill the unit is teaching. Every tangent
 -- question here is asked from the equation.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcv4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcv4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive

@@ -46,7 +46,7 @@
 -- ruler test on each: what a student measuring the drawing computes must land
 -- nearest a WRONG option.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mcr3u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mcr3u.sql.
 -- The figure file must come second, because the delete below clears the
 -- figure column along with the rest of each row.
 --

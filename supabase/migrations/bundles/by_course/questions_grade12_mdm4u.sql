@@ -87,7 +87,7 @@
 -- them. Every question that would have used one is asked from the list of
 -- data instead.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mdm4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mdm4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -504,7 +504,7 @@ values
 -- eye picks big rectangles, and a student answering on a phone would just
 -- be told that in the prompt.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file. The figure file for this
+-- RUN ORDER: astro_math_assist_setup.sql -> this file. The figure file for this
 -- course does not touch this unit, but it wipes and re-attaches the whole
 -- of MDM4U, so it should still be re-run after any reload here.
 --
@@ -929,7 +929,7 @@ values
 -- side of the mean the question is about, and getting that side right is
 -- most of what the z-score questions test.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mdm4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mdm4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -1356,7 +1356,7 @@ values
 -- Also rejected: tree diagrams. A drawn tree with the branch probabilities
 -- written on it has already done the work; building the tree IS the skill.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mdm4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mdm4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
@@ -1788,7 +1788,7 @@ values
 -- Also rejected: Pascal triangle diagrams. Printing the triangle answers
 -- every coefficient question in the unit by inspection.
 --
--- RUN ORDER: supabase_full_setup.sql -> this file -> figures_mdm4u.sql.
+-- RUN ORDER: astro_math_assist_setup.sql -> this file -> figures_mdm4u.sql.
 -- The figure file must come last, and must be re-run after any re-run of
 -- this one: the delete at the top wipes the figure column with the rest of
 -- the row. Student attempts (keyed on course, unit and sort_order) survive
