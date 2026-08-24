@@ -1,0 +1,40 @@
+{
+    "name": "Astro Math Assist",
+    "short_name": "Astro Math",
+    "lang": "en-CA",
+    "start_url": ".",
+    "scope": ".",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#F6F5F1",
+    "theme_color": "#2F6F62",
+    "description": "Ontario high-school maths practice that shows a student what they got wrong and why. Grades 9 to 12, with a report their tutor and their parents can read.",
+    "categories": ["education"],
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

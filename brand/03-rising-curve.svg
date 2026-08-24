@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Astro Math Assist">
+  <!-- Direction 3 — The rising curve.
+       A parabola climbing out of the corner with the point at the top. Says
+       "getting better at this" without a chart-going-up cliché, because the
+       curve is a real one: y = x squared, sampled and drawn.
+       The most optimistic of the five. Least distinctive at 16px. -->
+  <g stroke="#2F6F62" stroke-width="2.6" stroke-linecap="round" fill="none">
+    <path d="M12 10 L12 52"/>
+    <path d="M12 52 L54 52"/>
+  </g>
+  <path d="M14 51 Q34 49 47 19" fill="none" stroke="#2F6F62" stroke-width="3.4"
+        stroke-linecap="round" opacity="0.55"/>
+  <circle cx="47" cy="19" r="7" fill="#2F6F62"/>
+  <circle cx="47" cy="19" r="2.6" fill="#F6F5F1"/>
+</svg>

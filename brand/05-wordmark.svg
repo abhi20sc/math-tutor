@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 84" width="384" height="84" role="img" aria-label="Astro Math Assist">
+  <!-- Direction 5 — The wordmark.
+       Set in the same serif the app uses for maths, with the o of Astro
+       replaced by a point plotted on crosshairs. The joke is quiet enough to
+       survive being looked at every day, and it gives you a lockup for the
+       header where a bare icon would float.
+
+       An earlier draft used a pair of L-shaped axes here. The vertical arm
+       landed a few pixels from the r and read as a stray bar between the
+       letters. Crosshairs sit symmetrically around the ring instead, so
+       nothing crowds the word on either side.
+
+       Letter positions are measured, not guessed: 'Astr' renders 86.9px wide
+       at this size and 'Math Assist' 232px, which is what sets the two text
+       x-positions below. Change the font or the size and those numbers move.
+
+       Pairs with 01 or 02 as the icon. Same NOTE as 04: outline the text
+       before production. -->
+  <text x="10" y="60"
+        font-family="Georgia, 'Iowan Old Style', Palatino, 'Times New Roman', serif"
+        font-size="46" font-weight="600" fill="#1E2422">Astr</text>
+
+  <g stroke="#2F6F62" fill="none" stroke-linecap="round">
+    <g stroke-width="2" stroke-dasharray="1 5" opacity="0.55">
+      <path d="M115.5 31 L115.5 67"/>
+      <path d="M99 49 L132 49"/>
+    </g>
+    <circle cx="115.5" cy="49" r="9.5" stroke-width="4.6"/>
+  </g>
+
+  <text x="140" y="60"
+        font-family="Georgia, 'Iowan Old Style', Palatino, 'Times New Roman', serif"
+        font-size="46" font-weight="600" fill="#1E2422">Math Assist</text>
+</svg>

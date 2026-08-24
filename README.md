@@ -1,155 +1,270 @@
-# Math Tutor
+# Astro Math Assist
 
-A maths practice web app for Ontario high-school students, grades 9 to 12.
+Ontario high-school maths practice that shows a student *what they got wrong
+and why*. Grades 9 to 12, six courses, 1,600 questions and 219 lessons, with a
+progress report a tutor or a parent can read.
 
-**It is not an answer key.** Photomath already solves any question you point a
-camera at. What no app does well is tell a student *what they did wrong* — so
-every question here has four options, the three wrong ones are each the answer
-you get from a specific mistake, and picking one tells you which mistake you
-made **without revealing the correct answer**. You try again.
-
-That one decision shapes everything else: the scoring, the medals, the teacher
-dashboard, and the weekly report a parent receives.
-
-New to the project? Read **[docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)** —
-every feature in plain English, no code.
+Flutter Web on the front, Supabase Postgres on the back.
 
 ---
 
-## What is in here
+## The idea this is built on
 
-| Path | What |
+**Wrong answers are the product.**
+
+Every question has four options. The three wrong ones are not filler — each is
+the answer a student actually arrives at by making one specific, named mistake.
+Sign dropped when expanding a bracket. Second differences taken from the wrong
+pair. Slope read as run-over-rise.
+
+When a student taps a wrong option, the app names the mistake and says nothing
+about the right answer. It does not reveal the answer, and it does not say
+"try again". It says which turn was missed, and lets them go back and take it.
+
+That is why the schema carries `misconception_tag` on every question, why
+`attempts` records which wrong option was chosen rather than just a score, and
+why the report can say *"You're consistently distributing the negative"*
+instead of *"You got 6 out of 10"*.
+
+Everything else in the codebase exists to serve that.
+
+---
+
+## What a student sees
+
+Four sections, in order, and each one hands off to the next.
+
+| Section | What it does |
 |---|---|
-| `lib/main.dart` | The whole Flutter app. One file, ~5,700 lines, deliberately — see below |
-| `supabase/migrations/` | Database schema and all 200 questions |
-| `supabase/functions/` | Three Edge Functions for the parent emails |
-| `web-pages/` | Consent and unsubscribe pages the emails link to |
-| `docs/` | Handoff, feature guide, test plan, security review |
-| `tests/` | SQL test suites, runnable against a local Postgres |
+| **Learn** | A short read per subtopic — three to six minutes, a worked example, a diagram, and a Common Mistakes block naming the same errors the questions test. |
+| **Quiz** | Forty questions per unit in four difficulty bands: Easy 1–10, Medium 11–20, Challenge 21–30, Advanced 31–40. Graded server-side, one question at a time, with feedback on every wrong tap. |
+| **Improve** | Looks at which misconception tags a student keeps failing on, and builds a drill from exactly those. Not "practise more" — practise *this*. |
+| **Test** | A cumulative paper. No feedback until it is submitted, only the best score counts, and test attempts are deliberately excluded from the practice pool so a test never burns questions a student hasn't studied yet. |
 
-**On the single file:** a seven-file split was tried and rejected — *"just
-comment in the large dart file, this is tiresome to handle."* It has eight
-numbered sections and heavy teaching comments. Please keep it that way.
+The topic map colours every unit and subtopic by mastery, and there is a report
+behind it with first-try percentages, medals and a day streak. A tutor can share
+a read-only link to it with a parent.
 
 ---
 
-## Stack
+## Repository layout
 
-Flutter Web · Supabase (Postgres, Auth, Row Level Security) · Netlify ·
-Resend for email.
+```
+lib/main.dart              The entire Flutter app. One file, ~15,600 lines.
+                           Deliberately — see "Why one file" below.
 
-No server to maintain. The database enforces every access rule itself rather
-than trusting the app, which means a bug in the app cannot show one student
-another student's work.
+supabase/
+  migrations/
+    astro_math_assist_setup.sql   Schema, policies, functions. Run this first.
+    astro_sections.sql            Learn / Improve / Test / preferences.
+    questions/                    Source of truth: 40 per-unit files + figures.
+    lessons/                      Source of truth: 6 per-course files.
+    bundles/                      Generated. Same content, fewer pastes.
+    _superseded/                  Kept for old databases. Do not run.
+  functions/
+    create-checkout/              Stripe checkout session (Deno).
+    stripe-webhook/               Subscription status webhook (Deno).
+
+web/                       index.html, manifest, icons, privacy, terms,
+                           and 376 rendered figures (60 question diagrams,
+                           158 lesson diagrams x light and dark).
+
+tools/                     The content pipeline. Python.
+docs/                      Everything below, in detail.
+tests/                     SQL test suites, run against a scratch database.
+test/                      Dart widget tests.
+```
+
+### Why one file
+
+`lib/main.dart` is one file on purpose. The app is a single coherent screen
+graph with heavy shared state, and splitting it early would have meant
+inventing module boundaries before the shape was known. It is now big enough
+that this is a genuine liability, and splitting it is the next structural
+job — but it should be split along boundaries the code has actually revealed,
+not guessed ones.
 
 ---
 
-## Running it locally
+## Getting it running
+
+### The app
 
 ```bash
+flutter --version          # needs >= 3.27.0, Dart >= 3.7.0
+flutter pub get
+flutter analyze            # expect zero issues
+flutter test               # 18 widget tests
 flutter run -d chrome
 ```
 
-First build takes 2–3 minutes and sits at *"Waiting for connection from debug
-service"*. That is normal — do not Ctrl+C.
-
-Requires the database to be set up first (below).
-
----
-
-## Deploying
-
-**Order matters.** The setup file drops and rebuilds `questions` and
-`profiles`, so the questions always load after it.
-
-1. Supabase SQL editor → run `supabase/migrations/supabase_full_setup.sql`
-2. Same → run `supabase/migrations/questions_all_tagged.sql`
-3. Build and copy the static pages in:
+To build for deployment:
 
 ```bash
-flutter build web --base-href /
-cp web-pages/*.html build/web/
+flutter clean
+flutter build web --release
+# then deploy build/web/
 ```
 
-4. Drag `build/web` onto Netlify → Deploys
-5. Hard-reload the live site with **Cmd+Shift+R** (a normal reload serves the
-   cached old build)
+### The database
 
-`flutter build web` wipes that folder each time, so step 3's `cp` has to be
-repeated on every deploy. A deploy that silently drops `unsubscribe.html` is
-not noticed until a guardian clicks the link.
+Read **`docs/SQL_ORDER.md`** before running anything. It has two routes — one
+for a database that already has the question bank, one for an empty project —
+and running the wrong one is the main way to waste an afternoon.
 
-**After any re-run of the setup file, every student must sign in once before
-they appear on a teacher's roster** — signing in is what recreates their
-profile row.
+From an empty Supabase project, the short version:
 
-### Edge Functions
+1. `astro_math_assist_setup.sql` — every table, policy and function
+2. `bundles/questions_all.sql` — 1,600 questions and 60 figures
+3. `astro_sections.sql` — the Learn / Improve / Test tables and functions
+4. the six `lessons/*.sql` — 219 lessons
 
-```bash
-supabase functions deploy send-weekly-reports
-supabase functions deploy send-report-now
-supabase functions deploy send-consent-email
-```
+**One ordering rule that is easy to miss.** Inside every question file the
+figure statements come last, and they have to. Each unit block opens with
+`delete from questions where course_code = ... and unit = ...`, and that delete
+takes the figure reference with the row. A figure block that ran first would
+attach 60 images and then have them deleted straight back out — leaving the
+course imageless, with no error to show for it.
 
-Secrets (set once, read at runtime, no redeploy needed):
-
-```bash
-supabase secrets set RESEND_API_KEY=...
-supabase secrets set REPORT_FROM="Math Tutor <reports@yourdomain.ca>"
-supabase secrets set SITE_URL=https://your-site.netlify.app
-```
-
-### Making somebody a teacher
-
-Teacher accounts can read the work of every student in their class, so they
-are not self-serve. Generate a code, hand it over, and they redeem it in the
-app under **… → I am a teacher**.
+Verify afterwards:
 
 ```sql
-insert into teacher_invite_codes (code, label, max_uses, expires_at)
-values (upper(substr(md5(random()::text), 1, 10)),
-        'who this is for', 5, now() + interval '30 days')
-returning code;
+select course_code, count(*) from questions group by 1 order by 1;
+-- MCR3U 280 · MCV4U 240 · MDM4U 200 · MHF4U 280 · MPM2D 240 · MTH1W 360
+select count(*) from questions where figure is not null;   -- 60
+select count(*) from lessons;                              -- 219
 ```
 
-Use a random code rather than something memorable — see the security review.
+---
+
+## The security model
+
+Four rules. They are load-bearing, and three of them are invisible in the Dart.
+
+**1. Answers never reach the browser.**
+`questions` has RLS enabled with *no policy at all*, so no client can select
+from it. `list_questions` returns prompts and option text but never
+`correct_index` and never the feedback strings. Grading happens inside
+`submit_answer`, server-side, and the response carries back only whether the
+tap was right and the one feedback line for the option chosen.
+
+**2. Every RLS policy is `for select` only.**
+Nothing writes to the database through PostgREST. Every write goes through a
+`security definer` function that checks `auth.uid()` itself.
+
+**3. Five functions are protected only by the absence of a grant.**
+`grant_teacher_role`, `report_payload`, `upsert_subscription`,
+`update_subscription_by_sid` and `set_stripe_customer` have no grant to
+`authenticated`. That is the whole protection. **A blanket
+`grant execute on all functions in schema public to authenticated` lets any
+student make themselves an admin.** Never run one.
+
+**4. The SQL editor bypasses RLS entirely.**
+Anything you check in the Supabase SQL editor runs as the table owner and will
+happily return rows a signed-in student could never see. Permission changes have
+to be tested through the app, signed in as the relevant person.
+
+Secrets: `main.dart` carries the Supabase URL and the publishable key, which are
+public by design and useless without a policy that grants access. The Stripe
+secret key, the webhook secret and the service-role key exist only as
+`Deno.env.get(...)` lookups inside the Edge Functions. **None of the three
+belongs in `main.dart`, in the SQL, or in this repository.**
 
 ---
 
-## About keys
+## The content pipeline
 
-The Supabase **publishable** key appears in `lib/main.dart` and the two HTML
-pages. That is correct and safe: it grants nothing on its own, because Row
-Level Security is what actually protects the data.
+```
+tools/make_figures.py       60 question diagrams -> web/figures/
+tools/render_diagrams.py    158 lesson diagrams x 2 themes -> 316 PNGs
+tools/import_lessons.py     Maps external lesson HTML onto our units and tags
+tools/make_icons.py         The brand mark and every app icon
+tools/render_legal.py       docs/PRIVACY.md + TERMS.md -> web/*.html
+tools/check_questions.sql   The thirteen-check gate every unit must pass
+tools/check_distinct_options.py, check_option_lengths.py,
+tools/balance_answer_positions.py
+```
 
-The **service role** key and the **Resend** key must never appear in any file
-in this repo. They live only in Supabase Edge Function secrets. The service
-role key bypasses RLS entirely.
+Lesson diagrams are authored as SVG and rendered to PNG in both themes ahead of
+time, so the app needs no SVG package and reuses the same `Image.network` path
+the question figures already use.
 
----
-
-## Known issues
-
-**[docs/REVIEW.md](docs/REVIEW.md)** has the full audit. Two things matter
-before a real class uses this:
-
-- Teacher access codes are guessable if you pick memorable ones, and there is
-  no rate limit on redemption
-- `class_roster` joins two tables on the same key and multiplies its own rows
-
-Neither matters at family scale. Both matter at school scale.
+Question authoring rules live in `docs/AUTHORING_GUIDE.md`; lesson format in
+`docs/LESSON_AUTHORING.md`.
 
 ---
 
-## Before a real school
+## Tests
 
-Not technical, and not optional:
+| Suite | Count | Run against |
+|---|---|---|
+| `tests/test_ama.sql` | 212 checks | a scratch database — **never the live one**, it creates fixture users |
+| `tests/test_sections.sql` | 66 checks | a *different* scratch database from the above, or the same one before it |
+| `tests/test_rpc_names.sql` | 12 checks | calls every RPC by named argument |
+| `test/widget_test.dart` | 18 tests | `flutter test` |
 
-- **Tell students.** They can see which classes they are in and leave in one
-  tap. Keep it that way — access a child does not know about is surveillance
-  whatever the intent.
-- **Decide how students join.** A code is friendlier; a teacher adding by
-  email is harder to misuse.
-- **Read the privacy rules.** A dashboard holding children's academic records
-  and a list of guardian email addresses is where this stops being a family
-  project. In Ontario that means MFIPPA for schools and PIPEDA outside one.
+`test_rpc_names.sql` earns its place. PostgREST resolves functions by their
+**named arguments**, so renaming a SQL parameter breaks every call from the app
+at runtime while `flutter analyze` stays perfectly happy. That suite is the only
+thing that catches it.
+
+---
+
+## Where it stands
+
+Live in production: the schema, 1,600 questions, 219 lessons, 92 functions, and
+real student attempt history.
+
+**Not yet deployed:** the August build — the four-section loop, the tree view,
+dark mode and the branding are all in this repository but the hosted site still
+serves an older build. Deploying is the next step, not more features.
+
+Still open:
+
+- Link the privacy policy and terms from inside the app
+- Put the brand mark on the sign-in screen
+- Wire `test_scores` into `report_payload` so the topic map shows best test
+  score rather than first-try rate
+- The Astro+ enrolment form and the Edge Function that emails parents
+- Mobile layout pass
+
+`docs/PROJECT_STATE.md` is the honest, current account of all of it.
+
+---
+
+## Documentation
+
+| File | What's in it |
+|---|---|
+| `docs/PROJECT_STATE.md` | Current state, constraints, and the things that will bite you |
+| `docs/SQL_ORDER.md` | Which SQL files to run, in what order, and which never to run again |
+| `docs/INSTALL.md` | Setting up from nothing |
+| `docs/HOW_IT_WORKS.md` | The architecture |
+| `docs/AUTHORING_GUIDE.md` | How to write a question |
+| `docs/LESSON_AUTHORING.md` | How to write a lesson |
+| `docs/QUESTION_BANK_AUDIT.md` | The full audit of all 1,600 |
+| `docs/TESTING.md`, `docs/TEST_PROCEDURE.md` | How to run the suites |
+| `docs/RUNBOOK.md` | Operational tasks |
+| `docs/LAUNCH_CHECKLIST.md` | What has to be true before launch |
+
+---
+
+## Credits
+
+The topic-mindmap concept, the original Grade 9 and 10 lesson set, and the
+mastery-percentage rule come from Dileep Kumar's
+[topicmindmap](https://github.com/dileepku077/topicmindmap). 51 of the lessons
+here started as his and were remapped onto this app's units and misconception
+tags; the other 168 were authored for this project.
+
+---
+
+## A note on this repository being public
+
+The SQL under `supabase/migrations/questions/` contains `correct_index` and the
+full feedback text for every one of the 1,600 questions. In a public repository
+that is a public answer key, findable by any student who thinks to look.
+
+The running app is unaffected — the database never serves answers to a browser,
+whatever is in this repo. But if the question bank is ever meant to be the moat,
+this is the file set to move somewhere private.

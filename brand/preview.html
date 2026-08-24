@@ -1,0 +1,115 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>Astro Math Assist — colour pass</title>
+<style>
+:root{--ink:#1E2422;--soft:#6E7772;--line:#E2E0D9;--cream:#F6F5F1}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);
+ font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:40px 24px 80px}
+h1{font:600 27px/1.25 Georgia,serif;margin:0 0 6px}
+h2{font:600 19px/1.3 Georgia,serif;margin:44px 0 6px;padding-top:26px;border-top:1px solid var(--line)}
+p.note{color:var(--soft);font-size:13.5px;margin:0 0 18px;max-width:66ch}
+.card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 6px 20px #1E24220F,0 1px 2px #1E24220A}
+.eyebrow{font:700 11px/1 sans-serif;letter-spacing:1.4px;color:var(--soft);margin:0 0 12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:9px;border:1px solid;border-radius:999px;
+ padding:8px 15px;font-size:13.5px;font-weight:500}
+.mono{width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;
+ justify-content:center;font:700 12px Georgia,serif;color:#fff}
+.cnt{font-size:11.5px;font-weight:600}
+.medal{width:13px;height:13px;border-radius:50%;display:inline-block;background:#C9A227}
+.medal.gold{background:#C9A227}.medal.silver{background:#9AA0A6}.medal.bronze{background:#A2703F}
+.lvl{background:#fff;border-radius:14px;overflow:hidden;display:flex;margin-bottom:10px;
+ box-shadow:0 6px 20px #1E24220F,0 1px 2px #1E24220A}
+.rail{width:5px;flex:none}
+.lvlbody{flex:1;display:flex;align-items:center;justify-content:space-between;padding:16px 16px 16px 15px}
+.lvlt{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:700}
+.rungs{display:inline-flex;align-items:flex-end;gap:2.5px}
+.rungs i{width:3.5px;border-radius:2px;display:block}
+.sub{font-size:12.5px;color:var(--soft);margin-top:4px}
+.chev{color:var(--soft);font-size:20px}
+.row{background:#fff;border-radius:13px;padding:12px 14px;display:flex;align-items:center;gap:12px;
+ margin-bottom:10px;box-shadow:0 6px 20px #1E24220F,0 1px 2px #1E24220A}
+.av{width:34px;height:34px;border-radius:50%;flex:none;display:flex;align-items:center;
+ justify-content:center;font:700 13px sans-serif}
+.grow{flex:1;min-width:0}
+.nm{font-size:14.5px;font-weight:600}
+.stat{text-align:right;font:700 15.5px sans-serif}
+.cap{font:400 10px sans-serif;color:var(--soft)}
+.dots{color:var(--soft)}
+.hdr{background:linear-gradient(135deg,#2F6F621A,#2F6F6208);border:1px solid #2F6F6229;
+ border-radius:13px;padding:13px 16px;display:flex;align-items:center;justify-content:space-between}
+.grp{display:flex;align-items:center;gap:9px;font:700 11.5px sans-serif;letter-spacing:.8px;
+ color:var(--soft);margin:18px 0 8px}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.sw{width:100px;border-radius:10px;overflow:hidden;box-shadow:0 1px 2px #1E24220A}
+.sw .top{height:44px}
+.sw .bot{background:#fff;padding:6px 8px;font-size:11px;color:var(--soft)}
+.logos{display:flex;flex-wrap:wrap;gap:30px;align-items:flex-end;margin-top:8px}
+.logo{text-align:center}
+.logo .cap2{margin-top:8px;font-size:12px;color:var(--soft)}
+.small{display:flex;gap:26px;align-items:center;margin-top:22px;padding-top:18px;border-top:1px dashed var(--line)}
+.rev{background:#2F6F62;border-radius:12px;padding:20px;margin-top:16px;display:inline-block}
+</style></head><body><div class="wrap">
+
+<h1>Colour pass</h1>
+<p class="note">Rendered from the same values now in <code>main.dart</code>, so what is
+below is what the app draws. One rule runs through all of it: <b>the five traffic-light
+bands own “how well”, and nothing else is allowed to.</b> Every new colour here is
+identity — which unit, which person, which class — and never changes with progress.</p>
+
+<h2>The eight unit colours</h2>
+<p class="note">Each measures 4.5:1 or better against both white and the cream page, so
+each works as a fill under white text and as text on the background. Deliberately no
+green and no orange, so a unit tile can never be misread as “mastered” or “needs work”.</p>
+<div class="swatches"><div class=sw><div class=top style="background:#2F6F62"></div><div class=bot>teal<br>#2F6F62</div></div><div class=sw><div class=top style="background:#3B5BA9"></div><div class=bot>indigo<br>#3B5BA9</div></div><div class=sw><div class=top style="background:#7B4A86"></div><div class=bot>plum<br>#7B4A86</div></div><div class=sw><div class=top style="background:#A8552F"></div><div class=bot>clay<br>#A8552F</div></div><div class=sw><div class=top style="background:#4F7A3A"></div><div class=bot>moss<br>#4F7A3A</div></div><div class=sw><div class=top style="background:#2F6F8F"></div><div class=bot>slate<br>#2F6F8F</div></div><div class=sw><div class=top style="background:#A6455F"></div><div class=bot>rose<br>#A6455F</div></div><div class=sw><div class=top style="background:#8A6A1F"></div><div class=bot>ochre<br>#8A6A1F</div></div></div>
+
+<h2>Units — before and after</h2>
+<p class="note">Was eight identical white pills you had to read. Now each unit keeps one
+colour forever, seeded from its name so adding a unit never repaints the others. A lettered tile sat in front of each one for a
+while and has been cut — it repeated the first character of a word that was
+right beside it. Letters are for people now; colour alone is for things.</p>
+<div class="card"><p class="eyebrow">AFTER</p><div class="chips">
+<span class="chip" style="background:#3B5BA9;border-color:#3B5BA9;color:#fff">Linear systems</span>
+<span class="chip" style="background:#2F6F8F12;border-color:#2F6F8F47;color:#1E2422">Analytic geometry<span class="cnt" style="color:#6E7772">4/12</span></span>
+<span class="chip" style="background:#8A6A1F12;border-color:#8A6A1F47;color:#1E2422"><span class="medal gold"></span>Graphing quadratics</span>
+<span class="chip" style="background:#8A6A1F12;border-color:#8A6A1F47;color:#1E2422">Quadratic equations</span>
+<span class="chip" style="background:#A8552F12;border-color:#A8552F47;color:#1E2422"><span class="medal bronze"></span>Factoring</span>
+<span class="chip" style="background:#8A6A1F12;border-color:#8A6A1F47;color:#1E2422">Trigonometry</span>
+</div></div>
+
+<h2>Levels — the ramp is visible now</h2>
+<p class="note">Four names were carrying the whole idea of an order, and “Challenge”
+before “Advanced” is not obvious the first time you meet it. Four climbing rungs and a
+rail that deepens with the level say it without a word. A locked level keeps the shape
+and loses the colour — visibly the same thing, not yet available.</p>
+<div class="lvl"><div class="rail" style="background:#3B5BA96b"></div><div class="lvlbody"><div><div class="lvlt">Easy<span class="rungs"><i style="height:6px;background:#3B5BA9"></i><i style="height:8px;background:#3B5BA929"></i><i style="height:10px;background:#3B5BA929"></i><i style="height:12px;background:#3B5BA929"></i></span></div><div class="sub">10 of 10 answered</div></div><div class="r"><span class="medal gold" style="margin-right:10px"></span><span class="chev">›</span></div></div></div>
+<div class="lvl"><div class="rail" style="background:#3B5BA997"></div><div class="lvlbody"><div><div class="lvlt">Medium<span class="rungs"><i style="height:6px;background:#3B5BA9"></i><i style="height:8px;background:#3B5BA9"></i><i style="height:10px;background:#3B5BA929"></i><i style="height:12px;background:#3B5BA929"></i></span></div><div class="sub">4 of 10 answered</div></div><div class="r"><span class="chev">›</span></div></div></div>
+<div class="lvl"><div class="rail" style="background:#E2E0D9"></div><div class="lvlbody"><div><div class="lvlt">Challenge<span class="rungs"><i style="height:6px;background:#6E7772"></i><i style="height:8px;background:#6E7772"></i><i style="height:10px;background:#6E7772"></i><i style="height:12px;background:#6E777229"></i></span> <svg width="13" height="13" viewBox="0 0 24 24" fill="#6E7772cc"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 0 1 6 0v3H9z"/></svg></div><div class="sub">10 questions with Astro+</div></div><div class="r"><span class="chev">›</span></div></div></div>
+<div class="lvl"><div class="rail" style="background:#E2E0D9"></div><div class="lvlbody"><div><div class="lvlt">Advanced<span class="rungs"><i style="height:6px;background:#6E7772"></i><i style="height:8px;background:#6E7772"></i><i style="height:10px;background:#6E7772"></i><i style="height:12px;background:#6E7772"></i></span> <svg width="13" height="13" viewBox="0 0 24 24" fill="#6E7772cc"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 0 1 6 0v3H9z"/></svg></div><div class="sub">10 questions with Astro+</div></div><div class="r"><span class="chev">›</span></div></div></div>
+
+<h2>The roster — people have faces</h2>
+<p class="note">Twelve identical cards you could only tell apart by reading. The disc is
+seeded from the student ID, so it survives a name being corrected and two students called
+Sam do not collide. The percentage moved right and picked up its band colour — the one
+place on the row where colour is allowed to mean how somebody is doing.</p>
+<div class="row"><span class="av" style="background:#4F7A3A1F;color:#436831">AL</span><div class="grow"><div class="nm">Ann Lee</div><div class="sub">Practised today · 42 questions</div></div><div class="stat"><div style="color:#2E7D32">93%</div><div class="cap">first try</div></div><span class="medal gold" style="margin-left:10px"></span><b style="margin-left:5px">3</b><span class="dots">⋯</span></div>
+<div class="row"><span class="av" style="background:#2F6F8F1F;color:#285E7A">BR</span><div class="grow"><div class="nm">Ben Roy</div><div class="sub">Not seen for 11 days · 8 questions</div></div><div class="stat"><div style="color:#BC4708">48%</div><div class="cap">first try</div></div><span class="dots">⋯</span></div>
+<div class="row"><span class="av" style="background:#A6455F1F;color:#8D3B51">CO</span><div class="grow"><div class="nm">Cal Osei</div><div class="sub">Joined Tuesday · no questions yet</div></div><div class="stat"><div style="color:#E2E0D9;font-size:15px">—</div></div><span class="dots">⋯</span></div>
+
+<h2>Admin → one tutor’s students</h2>
+<p class="note">New screen. Tap a tutor in the admin panel and you get their classes and
+who is in them — the gap you hit. Grouped by class, quietest student first, read-only on
+purpose.</p>
+<div class="grp"><span style="width:4px;height:14px;border-radius:2px;background:#2F6F62;display:inline-block"></span>SATURDAY MPM2D · MPM2D<span style="flex:1"></span><span style="font-weight:400;letter-spacing:0">3 students</span></div>
+<div class="row"><span class="av" style="background:#A6455F1F;color:#8D3B51">CO</span><div class="grow"><div class="nm">Cal Osei</div><div class="sub">cal@example.ca · 0 questions · never practised</div></div><div class="stat"><div style="color:#E2E0D9;font-size:15px">—</div></div><span class="dots">⋯</span></div>
+<div class="row"><span class="av" style="background:#4F7A3A1F;color:#436831">AL</span><div class="grow"><div class="nm">Ann Lee</div><div class="sub">ann@example.ca · 42 questions · 3 medals · last 14 Aug 2026</div></div><div class="stat"><div style="color:#2E7D32">93%</div><div class="cap">first try</div></div><span class="dots">⋯</span></div>
+<div class="row"><span class="av" style="background:#2F6F8F1F;color:#285E7A">BR</span><div class="grow"><div class="nm">Ben Roy</div><div class="sub">ben@example.ca · 8 questions · last 16 Aug 2026</div></div><div class="stat"><div style="color:#BC4708">48%</div><div class="cap">first try</div></div><span class="dots">⋯</span></div>
+
+<h2>The header line</h2>
+<p class="note">“No units finished yet” was accurate and slightly grim as the first thing
+a new student reads. Same fact, pointed forwards.</p>
+<div class="hdr"><div><b style="font-size:13.5px">Your first medal is one finished unit away</b></div>
+<div><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid #E2E0D9;display:inline-block;margin-left:5px"></span><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid #E2E0D9;display:inline-block;margin-left:5px"></span><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid #E2E0D9;display:inline-block;margin-left:5px"></span><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid #E2E0D9;display:inline-block;margin-left:5px"></span><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid #E2E0D9;display:inline-block;margin-left:5px"></span><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid #E2E0D9;display:inline-block;margin-left:5px"></span></div></div>
+
+</div></body></html>

@@ -1,0 +1,25 @@
+# Static analysis configuration. Run with `flutter analyze`.
+#
+# The Flutter template puts
+#
+#     include: package:flutter_lints/flutter.yaml
+#
+# here, and this project has never had flutter_lints as a dependency — so
+# every analyse since the first one opened with an include_file_not_found
+# warning that nobody could act on. It is removed rather than resolved,
+# deliberately: switching a 12,000-line file that has never been linted onto
+# the full recommended set produces hundreds of findings at once, which
+# buries the real errors at exactly the point in a project where real errors
+# matter most.
+#
+# Turn it on as its own piece of work, when there is time to read the output:
+#
+#     flutter pub add --dev flutter_lints
+#     # then restore the include line above, and expect a long first run
+#
+# Nothing is switched on below. The analyzer's own errors and warnings — the
+# ones that catch actual bugs, and the ones the build depends on — are on
+# regardless of this file.
+
+linter:
+  rules: {}

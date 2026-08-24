@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Astro Math Assist">
+  <!-- Direction 4 — The monogram tile.
+       Not a new idea so much as the app's own idea, promoted. Every unit and
+       every class in the app already wears a rounded tile with a serif
+       initial; making the logo one of those means the brand mark and the
+       interface are the same object, which is rare and cheap to get here.
+
+       An earlier draft had a small point at the shoulder. It rendered as
+       "A°" at favicon size — a degree sign, or a typo. Removed: the tile is
+       stronger for being only the letter.
+
+       NOTE: live text, so you can retype it. Before it goes anywhere
+       permanent — favicon, app icon, print — convert the A to outlines, or
+       it renders in a different serif on machines without Georgia. -->
+  <rect x="2" y="2" width="60" height="60" rx="19" fill="#2F6F62"/>
+  <text x="32" y="47" text-anchor="middle"
+        font-family="Georgia, 'Iowan Old Style', Palatino, 'Times New Roman', serif"
+        font-size="40" font-weight="700" fill="#FFFFFF">A</text>
+</svg>

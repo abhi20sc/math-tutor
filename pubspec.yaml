@@ -1,24 +1,86 @@
+# ===========================================================================
+# Astro Math Assist
+# ===========================================================================
+#
+# Reconstructed, because the handover archive did not contain one and the
+# project cannot be built without it. It was rebuilt from the imports at the
+# top of lib/main.dart, so it declares exactly what the app actually uses and
+# nothing else.
+#
+# If your working copy on the Mac already has a pubspec.yaml that differs,
+# keep yours — it is the one that has been building successfully. This file is
+# here so that anybody starting from the archive alone can get to a build.
+#
+# The archive is also missing the web/ folder, which `flutter build web`
+# needs. If it is absent, regenerate it rather than hand-writing one, so the
+# bootstrap script matches your Flutter version:
+#
+#     flutter create --platforms=web .
+#
+# That adds web/index.html and web/manifest.json and touches nothing else.
+# ---------------------------------------------------------------------------
+
 name: math_tutor
-description: "Math Tutor — Flutter web app with a Supabase backend, teacher dashboard and parent reports."
-publish_to: 'none'
+description: >-
+  Maths practice for Ontario high school. Every wrong option is a specific
+  mistake, and the feedback names the mistake without revealing the answer.
+
+# Not a package. This stops a stray `dart pub publish` from ever succeeding.
+publish_to: none
 
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.12.2
+  # Flutter 3.44 on the build machine ships Dart 3.9. The lower bound is what
+  # the code actually needs: Color.withValues arrived in Flutter 3.27, and
+  # multiple `_` wildcard parameters in one signature — used in the avatar's
+  # error and frame builders — arrived in Dart 3.7.
+  sdk: ">=3.7.0 <4.0.0"
+  flutter: ">=3.27.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8
-  supabase_flutter: ^2.17.1
+  # Auth, Postgres and the RPC calls that are the entire data layer. The floor
+  # matters: main.dart initialises with `publishableKey:`, which is the new
+  # sb_publishable_... key style. Older releases only accept `anonKey:`. If
+  # the build complains that publishableKey is not a named parameter, the
+  # dependency is too old — `flutter pub upgrade supabase_flutter`.
+  supabase_flutter: ^2.9.0
 
+  # Opening the Stripe checkout and billing portal in a new tab.
+  url_launcher: ^6.3.0
+
+  # Profile photos. Two packages, one job each:
+  #
+  #   image_picker  opens the file chooser. On web this pulls in
+  #                 image_picker_for_web automatically.
+  #   image         decodes, square-crops and re-encodes to a 256px JPEG
+  #                 BEFORE anything is uploaded.
+  #
+  # The re-encode is not really about file size, though it does take a 4 MB
+  # phone photo down to about 20 kB. It is that a JPEG straight off a phone
+  # carries EXIF, and EXIF carries the GPS coordinates of where the picture
+  # was taken. These users are children; that is the location of a child's
+  # home or school. Decoding to pixels and re-encoding drops every tag.
+  image_picker: ^1.1.2
+  image: ^4.2.0
+
+# flutter_test is here so `flutter test` has something to run — see
+# test/widget_test.dart, which pins the percentage rule. It comes from the
+# SDK, so it costs nothing to resolve and ships nothing into the built app.
+#
+# flutter_lints is deliberately still absent: analysis_options.yaml explains
+# why, and turning it on is its own piece of work rather than a line here.
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  flutter_lints: ^6.0.0
-
 flutter:
   uses-material-design: true
+
+  # No assets and no fonts on purpose. The serif and monospace faces are
+  # picked from what is already on the machine (see kSerifFallback and
+  # kMonoFallback in main.dart), so there is nothing to download at runtime
+  # and the first paint is not waiting on a font file.

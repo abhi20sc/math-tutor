@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Astro Math Assist">
+  <!-- Direction 2 — The plotted point.
+       Two axes, two dashed guides, one point. This is the single most
+       recognisable image in school maths and it needs no explaining to a
+       fourteen-year-old or to their parent. The quietest of the five, and
+       the one that ages best. -->
+  <g stroke="#2F6F62" stroke-width="2.6" stroke-linecap="round" fill="none">
+    <path d="M13 9 L13 51"/>
+    <path d="M13 51 L55 51"/>
+  </g>
+  <!-- Guides: dashed, so they read as construction lines rather than as
+       part of the mark. -->
+  <g stroke="#2F6F62" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 5" opacity="0.5" fill="none">
+    <path d="M13 24 L41 24"/>
+    <path d="M41 51 L41 24"/>
+  </g>
+  <circle cx="41" cy="24" r="7" fill="#2F6F62"/>
+  <circle cx="41" cy="24" r="2.6" fill="#F6F5F1"/>
+</svg>
