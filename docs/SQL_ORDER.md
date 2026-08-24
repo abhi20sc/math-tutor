@@ -6,9 +6,12 @@ Two situations. **Yours is the first one** — read that and stop.
 
 ## A. Your live project (`frkswzowskeqmgdrrwab`)
 
-Checked just now: **1,600 questions, 60 figures, 8 accounts, 296 attempts.**
-The schema and the whole question bank are already there. You need **two
-steps, seven files**, and nothing else on this page.
+**There is nothing left to run.** Checked on 24 August 2026: 1,600 questions,
+60 figures, **219 lessons**, 92 functions, 8 accounts, 316 attempts, and two
+practice tests taken. The schema, the whole question bank, `astro_sections.sql`
+and all six lesson files are applied.
+
+This section used to list seven files to run, in this order:
 
 | # | File | Size | What it does |
 |---|---|---|---|
@@ -20,8 +23,10 @@ steps, seven files**, and nothing else on this page.
 | 6 | `…/lessons_mcv4u.sql` | 136 KB | 36 lessons |
 | 7 | `…/lessons_mdm4u.sql` | 132 KB | 30 lessons |
 
-Step 1 must come first — it creates the `lessons` table the other six write
-into. Files 2–7 are independent of each other and can go in any order.
+Step 1 has to come first, because it creates the `lessons` table the other six
+write into. Files 2–7 are independent and can go in any order. The order is
+kept here because it is the order to use again on any second project, and
+because re-running any one of the six is how you would correct a lesson.
 
 **Do NOT re-run the setup file or the question files.** They are already
 applied. Re-running the setup would drop and rebuild `questions` for no
@@ -136,4 +141,6 @@ ERROR: cannot change return type of existing function
 ```
 
 because the copy inside the setup file returns more columns than the old
-standalone one. Both are kept only for a database that predates the merge.
+standalone one. Both are kept only for a database that predates the merge, and
+both now sit in `supabase/migrations/_superseded/` alongside
+`supabase_full_setup.sql`, which the current setup file replaced.

@@ -94,7 +94,7 @@ not guessed ones.
 flutter --version          # needs >= 3.27.0, Dart >= 3.7.0
 flutter pub get
 flutter analyze            # expect zero issues
-flutter test               # 18 widget tests
+flutter test               # 14 widget tests
 flutter run -d chrome
 ```
 
@@ -201,12 +201,18 @@ Question authoring rules live in `docs/AUTHORING_GUIDE.md`; lesson format in
 | `tests/test_ama.sql` | 212 checks | a scratch database — **never the live one**, it creates fixture users |
 | `tests/test_sections.sql` | 66 checks | a *different* scratch database from the above, or the same one before it |
 | `tests/test_rpc_names.sql` | 12 checks | calls every RPC by named argument |
-| `test/widget_test.dart` | 18 tests | `flutter test` |
+| `test/widget_test.dart` | 14 tests | `flutter test` |
 
 `test_rpc_names.sql` earns its place. PostgREST resolves functions by their
 **named arguments**, so renaming a SQL parameter breaks every call from the app
 at runtime while `flutter analyze` stays perfectly happy. That suite is the only
 thing that catches it.
+
+All four were run on 24 August 2026 against a scratch Postgres built by route B
+above, from this repository, with nothing else in it: **212, 66, 12 and 14, all
+passing**, `flutter analyze` clean. The scratch database came out at 1,600
+questions, 60 figures, 219 lessons, six courses, and zero subtopics without a
+lesson.
 
 ---
 
@@ -236,6 +242,7 @@ Still open:
 
 | File | What's in it |
 |---|---|
+| `CHANGELOG.md` | What each release added, and what it removed |
 | `docs/PROJECT_STATE.md` | Current state, constraints, and the things that will bite you |
 | `docs/SQL_ORDER.md` | Which SQL files to run, in what order, and which never to run again |
 | `docs/INSTALL.md` | Setting up from nothing |
