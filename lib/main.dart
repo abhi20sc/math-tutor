@@ -12581,6 +12581,34 @@ class TestScore {
 /// The option they chose, whether it was right, and — only when it was not —
 /// the feedback line naming the mistake. Never the correct answer: these
 /// questions come round again, and printing it would spend one of them.
+/// One option of a finished paper's question: the text, and the mistake
+/// that lands on it.
+///
+/// The only type in this app that pairs an option with its feedback. See the
+/// note on TestReview.options for why it is not AnswerOption.
+class ReviewOption {
+  final String text;
+  final String? feedback;
+
+  const ReviewOption({required this.text, this.feedback});
+
+  factory ReviewOption.fromJson(Map<String, dynamic> json) => ReviewOption(
+        text: json['text'] as String? ?? '',
+        feedback: json['feedback'] as String?,
+      );
+}
+
+/// One question of a finished paper, as the student may now see it.
+///
+/// This is the ONE place in the app where the answer reaches the browser,
+/// and it is deliberate. The reasoning, and what it costs, is written out in
+/// supabase/migrations/test_review_answers.sql. The short version: a test is
+/// summative, its attempts never count as first looks, and a student handed
+/// a mark without being shown which fifteen they got wrong has been graded
+/// rather than taught.
+///
+/// Nothing about Quiz or Improve changed. Tap a wrong option there and it
+/// still names the mistake and keeps the answer to itself.
 class TestReview {
   final int itemNo;
   final String difficulty;
@@ -12590,6 +12618,27 @@ class TestReview {
   final String? feedback;
   final String subtopic;
 
+  /// Which option was tapped, and which was right. Both 0-based, both null
+  /// on a payload from a database that predates test_review_answers.sql —
+  /// the UI falls back to the old behaviour rather than rendering wrong.
+  final int? chosenIndex;
+  final int? correctIndex;
+
+  /// All four, each with the line that names the mistake it comes from.
+  ///
+  /// Deliberately NOT AnswerOption. That type carries text and nothing else,
+  /// and its whole job is to be the thing a question ships to the browser —
+  /// Block B of tests/test_ama.sql asserts as much. Reusing it here would
+  /// have quietly dropped the feedback, and worse, it would have blurred the
+  /// one line this app is built on. ReviewOption exists in exactly one
+  /// place, which is where the answer is allowed out.
+  ///
+  /// The correct option's feedback is exactly 'Correct.' by the authoring
+  /// rule, so there is no sentence in the bank explaining WHY the answer is
+  /// right. The review must not invent one. What it can show, and what is
+  /// worth more, is the named mistake behind each of the three wrong ones.
+  final List<ReviewOption> options;
+
   const TestReview({
     required this.itemNo,
     required this.difficulty,
@@ -12598,7 +12647,13 @@ class TestReview {
     required this.wasCorrect,
     required this.feedback,
     required this.subtopic,
+    this.chosenIndex,
+    this.correctIndex,
+    this.options = const [],
   });
+
+  /// Whether this row carries enough to show the full breakdown.
+  bool get hasAnswers => correctIndex != null && options.length == 4;
 
   factory TestReview.fromJson(Map<String, dynamic> j) => TestReview(
         itemNo: (j['item_no'] as num).toInt(),
@@ -12608,6 +12663,11 @@ class TestReview {
         wasCorrect: j['was_correct'] == true,
         feedback: j['feedback'] as String?,
         subtopic: j['subtopic'] as String? ?? '',
+        chosenIndex: (j['chosen_index'] as num?)?.toInt(),
+        correctIndex: (j['correct_index'] as num?)?.toInt(),
+        options: ((j['options'] as List?) ?? [])
+            .map((e) => ReviewOption.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
       );
 }
 
@@ -13150,7 +13210,7 @@ class _TestScreenState extends State<TestScreen> {
               ),
               label: Text(_showReview
                   ? 'Hide the questions'
-                  : 'Go through the questions'),
+                  : 'Go through the questions and answers'),
               style: TextButton.styleFrom(foregroundColor: kAccentDeep),
             ),
           ),
@@ -13368,28 +13428,141 @@ class _ReviewRow extends StatelessWidget {
             row.prompt,
             style: TextStyle(fontSize: 13.5, height: 1.5, color: kInk),
           ),
-          if (row.chosenText != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'You chose: ${row.chosenText}',
-              style: TextStyle(fontSize: 12.5, color: kInkSoft),
-            ),
-          ],
-          // Only on a wrong answer, and it names the mistake without
-          // printing the answer — these questions come round again.
-          if (row.feedback != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
-              decoration: BoxDecoration(
-                color: kWarmTint,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: kHint.withValues(alpha: 0.35)),
+          // The full breakdown, on a finished paper only. Every option, the
+          // one that was tapped, the one that was right, and the mistake
+          // behind each of the three that were not — including the two the
+          // student did not choose, which are the two they may still be one
+          // step away from choosing next time.
+          if (row.hasAnswers) ...[
+            const SizedBox(height: 10),
+            for (var i = 0; i < row.options.length; i++)
+              _ReviewOptionRow(
+                option: row.options[i],
+                isCorrect: i == row.correctIndex,
+                isChosen: i == row.chosenIndex,
               ),
+          ] else ...[
+            // A database that predates test_review_answers.sql. Show what
+            // the old payload carried rather than an empty space.
+            if (row.chosenText != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'You chose: ${row.chosenText}',
+                style: TextStyle(fontSize: 12.5, color: kInkSoft),
+              ),
+            ],
+            if (row.feedback != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
+                decoration: BoxDecoration(
+                  color: kWarmTint,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: kHint.withValues(alpha: 0.35)),
+                ),
+                child: Text(
+                  row.feedback!,
+                  style: TextStyle(fontSize: 12.5, height: 1.5, color: kHint),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One option inside the end-of-test review.
+///
+/// Three states, and the word matters as much as the colour: an option is
+/// marked "Answer", "Your answer", or both. A student who cannot tell green
+/// from amber still reads which was which.
+class _ReviewOptionRow extends StatelessWidget {
+  final ReviewOption option;
+  final bool isCorrect;
+  final bool isChosen;
+
+  const _ReviewOptionRow({
+    required this.option,
+    required this.isCorrect,
+    required this.isChosen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Right and chosen is one state, not two stacked on each other.
+    final tint = isCorrect ? kAccent : (isChosen ? kWrong : kLine);
+    final label = isCorrect
+        ? (isChosen ? 'Your answer, and right' : 'Answer')
+        : (isChosen ? 'You chose this' : null);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
+      decoration: BoxDecoration(
+        color: isCorrect
+            ? kWash
+            : (isChosen ? kWrongWash : Colors.transparent),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: isCorrect || isChosen ? tint.withValues(alpha: 0.5) : kLine,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                isCorrect
+                    ? Icons.check_circle_rounded
+                    : (isChosen
+                        ? Icons.cancel_rounded
+                        : Icons.circle_outlined),
+                size: 15,
+                color: isCorrect ? kAccent : (isChosen ? kWrong : kLine),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  option.text,
+                  style: TextStyle(
+                    fontFamily: kSerif,
+                    fontFamilyFallback: kSerifFallback,
+                    fontSize: 13.5,
+                    height: 1.45,
+                    color: kInk,
+                  ),
+                ),
+              ),
+              if (label != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 0.4,
+                    fontWeight: FontWeight.w800,
+                    color: isCorrect ? kAccent : kWrong,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          // The mistake this option comes from. Not shown on the right
+          // answer, where the bank only ever says 'Correct.' and printing
+          // that back would be filler.
+          if (!isCorrect &&
+              option.feedback != null &&
+              option.feedback!.trim().isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Padding(
+              padding: const EdgeInsets.only(left: 23),
               child: Text(
-                row.feedback!,
-                style: TextStyle(
-                    fontSize: 12.5, height: 1.5, color: kHint),
+                option.feedback!,
+                style: TextStyle(fontSize: 12, height: 1.5, color: kInkSoft),
               ),
             ),
           ],

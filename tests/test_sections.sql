@@ -403,10 +403,23 @@ begin
 
   perform ok('D6  review carries the difficulty, so a result reads by band too',
     (select count(distinct difficulty) from test_item_review(v_test)) = 4);
-  perform ok('D7  review still never prints the correct answer',
-    not exists (select 1 from information_schema.columns
-                where table_name='test_item_review'
-                  and column_name in ('correct_text','correct_index')));
+  -- D7 used to assert the opposite: that review never printed the answer.
+  -- It does now, on a finished paper only, and the reasoning is in
+  -- ../supabase/migrations/test_review_answers.sql. What replaced it is the
+  -- line that actually has to hold — the answer appears only AFTER the
+  -- paper is closed, and never while it is live. T6 and T9 above pin the
+  -- live half; these three pin the rest.
+  perform ok('D7a review returns the answer once the paper is finished',
+    (select bool_and(correct_index between 0 and 3)
+     from test_item_review(v_test)));
+  perform ok('D7b review returns all four options, with their feedback',
+    (select bool_and(jsonb_array_length(options) = 4
+                 and options -> correct_index ->> 'text' is not null)
+     from test_item_review(v_test)));
+  perform ok('D7c a live paper still reveals nothing',
+    (select count(*) from information_schema.columns
+      where table_name='test_paper'
+        and column_name in ('correct_index','feedback')) = 0);
   perform ok('D8  feedback appears only where the answer was wrong',
     (select bool_and((was_correct and feedback is null)
                   or ((not was_correct) and feedback is not null))

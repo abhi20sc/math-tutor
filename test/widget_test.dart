@@ -318,6 +318,75 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // The end-of-test review
+  // -------------------------------------------------------------------------
+  //
+  // The one place the answer is allowed to reach the browser. These pin the
+  // seam: a row only claims to have answers when the payload actually
+  // carries them, so a database that has not had
+  // supabase/migrations/test_review_answers.sql applied falls back to the
+  // old display instead of rendering a blank breakdown.
+  group('test review', () {
+    Map<String, dynamic> row({
+      int? chosenIndex,
+      int? correctIndex,
+      List<Map<String, dynamic>>? options,
+    }) =>
+        {
+          'item_no': 1,
+          'difficulty': 'Easy',
+          'prompt': 'Factor x^2 - 9.',
+          'chosen_text': '(x-3)^2',
+          'was_correct': false,
+          'feedback': 'You squared instead of using the difference of squares.',
+          'subtopic': 'Factoring',
+          if (chosenIndex != null) 'chosen_index': chosenIndex,
+          if (correctIndex != null) 'correct_index': correctIndex,
+          if (options != null) 'options': options,
+        };
+
+    final fourOptions = [
+      {'text': '(x-3)(x+3)', 'feedback': 'Correct.'},
+      {'text': '(x-3)^2', 'feedback': 'You squared instead.'},
+      {'text': '(x+3)^2', 'feedback': 'Sign dropped, then squared.'},
+      {'text': 'x(x-9)', 'feedback': 'You factored out x.'},
+    ];
+
+    test('a full payload reports that it has the answers', () {
+      final r = TestReview.fromJson(
+          row(chosenIndex: 1, correctIndex: 0, options: fourOptions));
+      expect(r.hasAnswers, isTrue);
+      expect(r.correctIndex, 0);
+      expect(r.options.length, 4);
+      expect(r.options[0].text, '(x-3)(x+3)');
+      expect(r.options[1].feedback, 'You squared instead.');
+    });
+
+    test('a payload from a database without the migration does not', () {
+      // No chosen_index, no correct_index, no options — exactly what the
+      // old function returns. The row still parses and still carries what
+      // it always did.
+      final r = TestReview.fromJson(row());
+      expect(r.hasAnswers, isFalse);
+      expect(r.correctIndex, isNull);
+      expect(r.options, isEmpty);
+      expect(r.chosenText, '(x-3)^2');
+      expect(r.feedback, isNotNull);
+    });
+
+    test('a truncated option list does not count as having the answers', () {
+      // Fewer than four means something is wrong upstream. Better to fall
+      // back than to draw three options and let a student conclude the
+      // fourth did not exist.
+      final r = TestReview.fromJson(row(
+          chosenIndex: 1,
+          correctIndex: 0,
+          options: fourOptions.take(3).toList()));
+      expect(r.hasAnswers, isFalse);
+    });
+  });
+
   testWidgets('an unopened subject says so rather than doing nothing',
       (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(

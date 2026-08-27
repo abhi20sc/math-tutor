@@ -39,7 +39,7 @@ Four sections, in order, and each one hands off to the next.
 | **Learn** | A short read per subtopic — three to six minutes, a worked example, a diagram, and a Common Mistakes block naming the same errors the questions test. |
 | **Quiz** | Forty questions per unit in four difficulty bands: Easy 1–10, Medium 11–20, Challenge 21–30, Advanced 31–40. Graded server-side, one question at a time, with feedback on every wrong tap. |
 | **Improve** | Looks at which misconception tags a student keeps failing on, and builds a drill from exactly those. Not "practise more" — practise *this*. |
-| **Test** | A cumulative paper. No feedback until it is submitted, only the best score counts, and test attempts are deliberately excluded from the practice pool so a test never burns questions a student hasn't studied yet. |
+| **Test** | A cumulative paper. No feedback until it is submitted, only the best score counts, and test attempts are deliberately excluded from the practice pool so a test never burns questions a student hasn't studied yet. Once it is submitted, the review shows every question with all four options, which one was tapped, which was right, and the mistake behind each wrong one. |
 
 The topic map colours every unit and subtopic by mastery, and there is a report
 behind it with first-try percentages, medals and a day streak. A tutor can share
@@ -141,12 +141,20 @@ select count(*) from lessons;                              -- 219
 
 Four rules. They are load-bearing, and three of them are invisible in the Dart.
 
-**1. Answers never reach the browser.**
+**1. Answers never reach the browser, with one named exception.**
 `questions` has RLS enabled with *no policy at all*, so no client can select
 from it. `list_questions` returns prompts and option text but never
 `correct_index` and never the feedback strings. Grading happens inside
 `submit_answer`, server-side, and the response carries back only whether the
 tap was right and the one feedback line for the option chosen.
+
+The exception is `test_item_review`, and only for a paper that is **yours
+and finished**. It returns all four options, their feedback and the correct
+index, so the end-of-test review can show a student which fifteen they got
+wrong and why. A live paper still reveals nothing — `test_paper` ships no
+answer and `answer_test_item` returns nothing, which suite checks T6, T9 and
+D7c pin. The reasoning, and what the exception costs, is written out at the
+top of `supabase/migrations/test_review_answers.sql`.
 
 **2. Every RLS policy is `for select` only.**
 Nothing writes to the database through PostgREST. Every write goes through a

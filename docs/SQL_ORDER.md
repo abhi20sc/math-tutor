@@ -6,10 +6,21 @@ Two situations. **Yours is the first one** — read that and stop.
 
 ## A. Your live project (`frkswzowskeqmgdrrwab`)
 
-**There is nothing left to run.** Checked on 24 August 2026: 1,600 questions,
+**One file to run.**
+
+| # | File | Size | What it does |
+|---|---|---|---|
+| 1 | `supabase/migrations/test_review_answers.sql` | 5 KB | Widens `test_item_review` so the end-of-test review can show the answer |
+
+It drops and recreates one function and touches no table, so no student
+loses a row. Read its header before running it: it deliberately relaxes the
+answers-never-reach-the-browser rule for a finished paper, and says what
+that costs.
+
+Everything else is applied. Checked on 24 August 2026: 1,600 questions,
 60 figures, **219 lessons**, 92 functions, 8 accounts, 316 attempts, and two
 practice tests taken. The schema, the whole question bank, `astro_sections.sql`
-and all six lesson files are applied.
+and all six lesson files are all in.
 
 This section used to list seven files to run, in this order:
 
@@ -47,6 +58,7 @@ test against.
 | 2 | `bundles/questions_all.sql` | 1.2 MB | 1,600 questions and 60 figures |
 | 3 | `astro_sections.sql` | 62 KB | Learn / Improve / Test / preferences |
 | 4–9 | the six `lessons/*.sql` | 76–149 KB | 219 lessons |
+| 10 | `test_review_answers.sql` | 5 KB | The end-of-test review shows the answer |
 
 **If the editor chokes on the 1.2 MB file at step 2**, use the six in
 `bundles/by_course/` instead — same content, one course each, any order:
