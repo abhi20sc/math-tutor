@@ -548,6 +548,81 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // Phone width
+  // -------------------------------------------------------------------------
+  //
+  // Seven dialogs in this app set a fixed SizedBox width between 380 and 520.
+  // On a 375pt phone every one of those is wider than the screen.
+  //
+  // Flutter's own layout clamps a SizedBox to its parent's constraints, so
+  // the theory is that they are all fine. Theory is not evidence: an
+  // overflow inside one of them fails the test below with the yellow-and-
+  // black banner, and nothing else in this project would have caught it.
+  //
+  // Only widgets that do not touch Supabase can be pumped — anything holding
+  // a repository reaches for Supabase.instance in its field initialisers and
+  // throws before it can lay anything out. That is a real limit on this
+  // group and the reason it covers presentation rather than screens.
+  group('at 375x812, the smallest phone we support', () {
+    setUp(() => kPalette = AstroPalette.light);
+
+    Future<void> pumpPhone(WidgetTester tester, Widget child) async {
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: child));
+      await tester.pump();
+    }
+
+    testWidgets('the Astro+ dialog fits', (tester) async {
+      await pumpPhone(tester, const AstroPlusDialog());
+      expect(find.text('Astro+'), findsOneWidget);
+      // The option a student with no card actually needs. Exact text, not
+      // textContaining: the body copy above the tiles says "Ask a parent or
+      // guardian to do this part" and would match too.
+      expect(find.text('Ask a parent or guardian'), findsOneWidget);
+    });
+
+    testWidgets('the subject switcher fits', (tester) async {
+      await pumpPhone(tester, const Scaffold(body: SubjectSwitcher()));
+      for (final s in AstroSubject.values) {
+        expect(find.text(s.label), findsOneWidget);
+      }
+    });
+
+    testWidgets('the joke strip fits, and in the dark too', (tester) async {
+      await pumpPhone(
+          tester, const Scaffold(body: JokeStrip(seed: 'Quadratics')));
+      kPalette = AstroPalette.dark;
+      await tester.pumpWidget(const MaterialApp(
+          home: Scaffold(body: JokeStrip(seed: 'Quadratics'))));
+      await tester.pump();
+    });
+
+    testWidgets('the brand mark fits at every size it is used at',
+        (tester) async {
+      for (final size in [26.0, 56.0, 72.0]) {
+        await pumpPhone(tester, Scaffold(body: BrandBadge(size: size)));
+      }
+    });
+
+    testWidgets('four segmented tabs fit, which is the widest row we build',
+        (tester) async {
+      await pumpPhone(
+        tester,
+        Scaffold(
+          body: SegmentedTabs(
+            labels: const ['Learn', 'Quiz', 'Improve', 'Test'],
+            selected: 0,
+            onSelect: (_) {},
+          ),
+        ),
+      );
+      expect(find.text('Improve'), findsOneWidget);
+    });
+  });
+
   testWidgets('an unopened subject says so rather than doing nothing',
       (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(

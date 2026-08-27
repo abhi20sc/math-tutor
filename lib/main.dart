@@ -12590,12 +12590,17 @@ class AstroPlusDialog extends StatelessWidget {
       backgroundColor: kCard,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Text('Astro+', style: TextStyle(fontSize: 18)),
+      // Scrollable, because on a 375x812 phone this content is 388 pixels
+      // taller than the dialog it sits in. It was close to the edge with
+      // three plan tiles and went over with the fourth; a fixed-height
+      // Column in a dialog is a bug waiting for one more line of copy.
       content: SizedBox(
         width: 380,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Text(
               'Astro+ unlocks the Challenge and Advanced levels, and a tutor '
               'who reviews your work and gives feedback.',
@@ -12639,9 +12644,10 @@ class AstroPlusDialog extends StatelessWidget {
             _PlanTile(
               title: 'Ask a parent or guardian',
               subtitle: 'We make a link for them. Nothing is charged now.',
-              onTap: () => Navigator.of(context).pop('enrol'),
-            ),
-          ],
+                onTap: () => Navigator.of(context).pop('enrol'),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
