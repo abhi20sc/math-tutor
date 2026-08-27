@@ -6,16 +6,22 @@ Two situations. **Yours is the first one** — read that and stop.
 
 ## A. Your live project (`frkswzowskeqmgdrrwab`)
 
-**One file to run.**
+**Two files to run, in any order.**
 
 | # | File | Size | What it does |
 |---|---|---|---|
-| 1 | `supabase/migrations/test_review_answers.sql` | 5 KB | Widens `test_item_review` so the end-of-test review can show the answer |
+| 1 | `supabase/migrations/test_review_answers.sql` | 6 KB | Widens `test_item_review` so the end-of-test review can show the answer |
+| 2 | `supabase/migrations/learn_journey.sql` | 6 KB | Adds `solved` to `list_lessons`, which is what the Learn path gates on |
 
-It drops and recreates one function and touches no table, so no student
-loses a row. Read its header before running it: it deliberately relaxes the
+Each drops and recreates one function and touches no table, so no student
+loses a row and neither depends on the other.
+
+Read the header of the first before running it: it deliberately relaxes the
 answers-never-reach-the-browser rule for a finished paper, and says what
 that costs.
+
+The second is safe to delay. Until it is run the Learn path draws but locks
+nothing, which is exactly how Learn behaves today.
 
 Everything else is applied. Checked on 24 August 2026: 1,600 questions,
 60 figures, **219 lessons**, 92 functions, 8 accounts, 316 attempts, and two
@@ -58,7 +64,8 @@ test against.
 | 2 | `bundles/questions_all.sql` | 1.2 MB | 1,600 questions and 60 figures |
 | 3 | `astro_sections.sql` | 62 KB | Learn / Improve / Test / preferences |
 | 4–9 | the six `lessons/*.sql` | 76–149 KB | 219 lessons |
-| 10 | `test_review_answers.sql` | 5 KB | The end-of-test review shows the answer |
+| 10 | `test_review_answers.sql` | 6 KB | The end-of-test review shows the answer |
+| 11 | `learn_journey.sql` | 6 KB | The Learn path, and what it gates on |
 
 **If the editor chokes on the 1.2 MB file at step 2**, use the six in
 `bundles/by_course/` instead — same content, one course each, any order:

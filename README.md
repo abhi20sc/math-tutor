@@ -36,7 +36,7 @@ Four sections, in order, and each one hands off to the next.
 
 | Section | What it does |
 |---|---|
-| **Learn** | A short read per subtopic — three to six minutes, a worked example, a diagram, and a Common Mistakes block naming the same errors the questions test. |
+| **Learn** | A path, one node per subtopic. A three to six minute read with a worked example, a diagram and a Common Mistakes block naming the same errors the questions test — then three questions on it to open the next node. Wrong answers cost nothing at the gate: they name the mistake and you go again, which is the whole app in miniature. |
 | **Quiz** | Forty questions per unit in four difficulty bands: Easy 1–10, Medium 11–20, Challenge 21–30, Advanced 31–40. Graded server-side, one question at a time, with feedback on every wrong tap. |
 | **Improve** | Looks at which misconception tags a student keeps failing on, and builds a drill from exactly those. Not "practise more" — practise *this*. |
 | **Test** | A cumulative paper. No feedback until it is submitted, only the best score counts, and test attempts are deliberately excluded from the practice pool so a test never burns questions a student hasn't studied yet. Once it is submitted, the review shows every question with all four options, which one was tapped, which was right, and the mistake behind each wrong one. |

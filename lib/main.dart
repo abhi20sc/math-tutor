@@ -5376,7 +5376,11 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    final read = _unitLessons.where((l) => l.isRead).length;
+    final states = learnPathStates(_unitLessons);
+    final done = states.where((s) => s == LessonNodeState.done).length;
+    final locking = states.contains(LessonNodeState.locked) ||
+        _unitLessons.every((l) => l.hasGateData);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -5395,20 +5399,37 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             Text(
-              '$read of ${_unitLessons.length} read',
+              '$done of ${_unitLessons.length} done',
               style: TextStyle(fontSize: 12.5, color: kInkSoft),
             ),
           ],
         ),
         const SizedBox(height: 4),
         Text(
-          'Short reads. Each one ends with the mistakes people actually make '
-          'on it, which are the same mistakes the questions are built from.',
+          locking
+              ? 'One at a time. Read it, then get ${Lesson.gateSize} questions '
+                  'on it right, and the next one opens. Wrong answers do not '
+                  'count against you here — they tell you which turn you '
+                  'missed and you go again.'
+              : 'Short reads. Each one ends with the mistakes people actually '
+                  'make on it, which are the same mistakes the questions are '
+                  'built from.',
           style: TextStyle(fontSize: 12.5, height: 1.5, color: kInkSoft),
         ),
         const SizedBox(height: 16),
-        for (final l in _unitLessons)
-          LessonTile(lesson: l, onTap: () => _openLesson(l)),
+        for (var i = 0; i < _unitLessons.length; i++)
+          LessonNode(
+            lesson: _unitLessons[i],
+            state: states[i],
+            isLast: i == _unitLessons.length - 1,
+            onOpen: states[i] == LessonNodeState.locked
+                ? null
+                : () => _openLesson(_unitLessons[i]),
+            onPractise: states[i] == LessonNodeState.locked ||
+                    !_unitLessons[i].hasGate
+                ? null
+                : () => _openGate(_unitLessons[i]),
+          ),
         const SizedBox(height: 8),
         PrimaryButton(
           label: 'Try the questions',
@@ -5416,6 +5437,30 @@ class _HomePageState extends State<HomePage> {
         ),
       ],
     );
+  }
+
+  /// The gate: a short drill on this lesson's subtopic.
+  ///
+  /// Reuses DrillScreen, which is what Improve already opens, so a gate is
+  /// not a second kind of question screen — it is the same one, pointed at
+  /// one tag. The lessons are refetched afterwards because the gate is
+  /// derived from attempts, so the path only moves once the server agrees
+  /// it should.
+  Future<void> _openGate(Lesson lesson) async {
+    final tag = lesson.tag;
+    if (tag == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => DrillScreen(
+          course: _profile!.course,
+          tags: [tag],
+          title: lesson.subtopic,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    final unit = _selectedUnit;
+    if (unit != null) await _loadLessons(unit);
   }
 
   Widget _buildQuizArea() {
@@ -11100,6 +11145,24 @@ class Lesson {
   final Band? band;
   final int firstLooks;
 
+  /// Distinct questions on this subtopic the student has ever got right,
+  /// however many attempts each took. The gate on the Learn path counts
+  /// this, not the band — see learn_journey.sql for why the two have to be
+  /// different numbers.
+  final int solved;
+
+  /// Whether the payload carried `solved` at all.
+  ///
+  /// This is not fussiness. A database that has not had learn_journey.sql
+  /// applied returns no such column, every lesson reads solved = 0, every
+  /// gate is shut, and the Learn section locks at the first node — a
+  /// working feature turned into a wall by a migration nobody ran yet.
+  ///
+  /// So the path asks this before it locks anything. Missing column, no
+  /// locking: the journey still draws, every node stays open, and the app
+  /// degrades to exactly what it did before.
+  final bool hasGateData;
+
   const Lesson({
     required this.id,
     required this.tag,
@@ -11113,9 +11176,33 @@ class Lesson {
     required this.readSeconds,
     required this.band,
     required this.firstLooks,
+    this.solved = 0,
+    this.hasGateData = true,
   });
 
   bool get isRead => readAt != null;
+
+  /// How many questions on this subtopic have to be solved before the next
+  /// node opens.
+  ///
+  /// Three, and low on purpose. The gate exists to stop somebody scrolling
+  /// past nine lessons in a minute, not to be a second quiz — Quiz is forty
+  /// questions and is where the work is. A gate long enough to be a
+  /// challenge would make Learn something to get through rather than
+  /// something to read.
+  static const int gateSize = 3;
+
+  /// A lesson with no subtopic — a unit opener — has nothing to be tested
+  /// on, so it is done once it is read.
+  bool get hasGate => tag != null;
+
+  bool get gatePassed => !hasGate || solved >= gateSize;
+
+  /// Read AND past the gate. The path opens the next node on this.
+  bool get isComplete => isRead && gatePassed;
+
+  /// How far through the gate, 0 to gateSize.
+  int get gateProgress => hasGate ? solved.clamp(0, gateSize) : gateSize;
 
   factory Lesson.fromJson(Map<String, dynamic> j) => Lesson(
         id: (j['id'] as num).toInt(),
@@ -11132,7 +11219,75 @@ class Lesson {
         readSeconds: (j['read_seconds'] as num?)?.toInt() ?? 0,
         band: j['band'] == null ? null : bandFrom(j['band'] as String?),
         firstLooks: (j['first_looks'] as num?)?.toInt() ?? 0,
+        solved: (j['solved'] as num?)?.toInt() ?? 0,
+        hasGateData: j.containsKey('solved'),
       );
+}
+
+/// Where one node sits on the Learn path.
+///
+/// Three states, and the order of the list is the order of the journey.
+enum LessonNodeState {
+  /// Read, and past its gate. Nothing left to do here.
+  done,
+
+  /// The one to do next, or one already started. Open.
+  active,
+
+  /// An earlier node is not finished yet.
+  locked,
+}
+
+/// The Learn path: which lesson a student may open, in what order.
+///
+/// Borrowed from Coddy, which lays a course out as a line of nodes you
+/// unlock forward — read a little, then prove it on a few questions, then
+/// the next one opens. It suits Learn because lessons already sit in a
+/// deliberate order inside a unit, each one assuming the last. It would not
+/// suit Improve, which is built to send a student to whatever they keep
+/// getting wrong regardless of where it sits.
+///
+/// The rule, in one line: EVERY NODE BEFORE THIS ONE IS COMPLETE.
+///
+/// Three properties this has to hold, and they are what the tests check:
+///
+///   * exactly one active node, unless the whole unit is finished, in which
+///     case none — a student always knows what is next
+///   * nothing after a locked node is ever open, so the line cannot have a
+///     hole in it
+///   * a unit where nothing has been done yet still has its FIRST node
+///     open, or the path would be a wall
+///
+/// A lesson already read is never re-locked by a later change, because
+/// isComplete needs isRead and reading does not come undone.
+List<LessonNodeState> learnPathStates(List<Lesson> lessons) {
+  // A database without learn_journey.sql cannot answer the gate question,
+  // and the safe answer to "I do not know" is not "locked". Draw the path,
+  // lock nothing, and let a student work exactly as they did before.
+  if (lessons.any((l) => !l.hasGateData)) {
+    return [
+      for (final lesson in lessons)
+        lesson.isRead ? LessonNodeState.done : LessonNodeState.active,
+    ];
+  }
+
+  final states = <LessonNodeState>[];
+  var everythingBeforeIsDone = true;
+  for (final lesson in lessons) {
+    if (lesson.isComplete) {
+      states.add(LessonNodeState.done);
+      continue;
+    }
+    if (everythingBeforeIsDone) {
+      states.add(LessonNodeState.active);
+      // The first unfinished node is the only open one. Everything past it
+      // waits.
+      everythingBeforeIsDone = false;
+    } else {
+      states.add(LessonNodeState.locked);
+    }
+  }
+  return states;
 }
 
 /// The lesson itself, fetched only when one is opened.
@@ -11926,120 +12081,242 @@ class _VideoLink extends StatelessWidget {
 }
 
 /// A row in the Learn list.
-class LessonTile extends StatelessWidget {
+/// One node on the Learn path.
+///
+/// A numbered marker, a connector down to the next one, and the lesson
+/// beside it. The three states are drawn differently AND labelled: a
+/// locked node says "Locked" rather than only going pale, because pale is
+/// how a disabled control looks when an app is broken.
+///
+/// The gate sits inside the node rather than on a screen of its own, so a
+/// student can see what is between them and the next lesson without
+/// opening anything.
+class LessonNode extends StatelessWidget {
   final Lesson lesson;
-  final VoidCallback onTap;
+  final LessonNodeState state;
+  final bool isLast;
 
-  const LessonTile({super.key, required this.lesson, required this.onTap});
+  /// Null when the node is locked.
+  final VoidCallback? onOpen;
+
+  /// Null when the node is locked, or when the lesson has no subtopic and
+  /// so has no questions to be gated on.
+  final VoidCallback? onPractise;
+
+  const LessonNode({
+    super.key,
+    required this.lesson,
+    required this.state,
+    required this.isLast,
+    this.onOpen,
+    this.onPractise,
+  });
+
+  bool get _locked => state == LessonNodeState.locked;
+  bool get _done => state == LessonNodeState.done;
 
   @override
   Widget build(BuildContext context) {
-    final band = lesson.band;
-    // Only worth saying something about the student's standing once there
-    // is something to say. Under two first looks the band is grey, and
-    // "not started" beside a lesson they have not read is noise.
-    final showBand = band != null && lesson.firstLooks >= 2;
+    final marker = _done
+        ? kAccent
+        : (_locked ? kLine : kAccentSurface);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: kCard,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kLine),
-              boxShadow: kCardShadow,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Semantics(
+      button: !_locked,
+      enabled: !_locked,
+      label: '${lesson.title}. '
+          '${_done ? 'Done.' : (_locked ? 'Locked.' : 'Open.')}',
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // The line of the journey: a marker, and a rail running down to
+            // the next node.
+            Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 2, right: 12),
-                  child: Icon(
-                    lesson.isRead
-                        ? Icons.check_circle_rounded
-                        : Icons.circle_outlined,
-                    size: 20,
-                    color: lesson.isRead ? kAccent : kLine,
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: _done ? marker : kCard,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: marker, width: 2),
+                  ),
+                  child: Center(
+                    child: _done
+                        ? Icon(Icons.check_rounded, size: 15, color: kOnAccent)
+                        : (_locked
+                            ? Icon(Icons.lock_rounded,
+                                size: 13, color: kInkSoft)
+                            : Text(
+                                '${lesson.sortOrder}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: kAccentSurface,
+                                ),
+                              )),
                   ),
                 ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        lesson.title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: kInk,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        lesson.summary,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 13, height: 1.45, color: kInkSoft),
-                      ),
-                      const SizedBox(height: 7),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            '${lesson.readMinutes} min',
-                            style: TextStyle(
-                                fontSize: 11.5, color: kInkSoft),
-                          ),
-                          if (lesson.hasVideo)
-                            Text(
-                              'video',
-                              style:
-                                  TextStyle(fontSize: 11.5, color: kInkSoft),
-                            ),
-                          if (showBand)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                    color: bandColour(band),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  bandWord(band).toLowerCase(),
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: bandTextColour(band),
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ],
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 3),
+                      color: _done ? kAccent.withValues(alpha: 0.45) : kLine,
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child:
-                      Icon(Icons.chevron_right_rounded, size: 20, color: kInkSoft),
-                ),
               ],
             ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
+                child: Opacity(
+                  // Pale, but never so pale it cannot be read — a student
+                  // should be able to see what is coming.
+                  opacity: _locked ? 0.65 : 1,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+                    decoration: BoxDecoration(
+                      color: kCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: state == LessonNodeState.active
+                            ? kAccent.withValues(alpha: 0.55)
+                            : kLine,
+                        width: state == LessonNodeState.active ? 1.5 : 1,
+                      ),
+                      boxShadow:
+                          state == LessonNodeState.active ? kCardShadow : null,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                lesson.title,
+                                style: TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: kInk,
+                                ),
+                              ),
+                            ),
+                            if (_locked)
+                              Text(
+                                'LOCKED',
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  letterSpacing: 0.8,
+                                  fontWeight: FontWeight.w800,
+                                  color: kInkSoft,
+                                ),
+                              )
+                            else
+                              Text(
+                                '${lesson.readMinutes} min',
+                                style: TextStyle(
+                                    fontSize: 11.5, color: kInkSoft),
+                              ),
+                          ],
+                        ),
+                        if (lesson.summary.isNotEmpty) ...[
+                          const SizedBox(height: 5),
+                          Text(
+                            lesson.summary,
+                            style: TextStyle(
+                                fontSize: 12.5, height: 1.45, color: kInkSoft),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        if (_locked)
+                          Text(
+                            'Finish the one above to open this.',
+                            style: TextStyle(fontSize: 12, color: kInkSoft),
+                          )
+                        else
+                          Row(
+                            children: [
+                              _NodeAction(
+                                icon: lesson.isRead
+                                    ? Icons.menu_book_rounded
+                                    : Icons.play_arrow_rounded,
+                                label: lesson.isRead ? 'Read again' : 'Read',
+                                onTap: onOpen,
+                                primary: !lesson.isRead,
+                              ),
+                              if (lesson.hasGate) ...[
+                                const SizedBox(width: 8),
+                                _NodeAction(
+                                  icon: Icons.bolt_rounded,
+                                  label: lesson.gatePassed
+                                      ? 'Practise'
+                                      : '${lesson.gateProgress} of '
+                                          '${Lesson.gateSize}',
+                                  onTap: onPractise,
+                                  primary:
+                                      lesson.isRead && !lesson.gatePassed,
+                                ),
+                              ],
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One of the two small buttons inside a node.
+class _NodeAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool primary;
+
+  const _NodeAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final on = onTap != null;
+    return Material(
+      color: primary && on ? kAccentSurface : kTrack,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  size: 14,
+                  color: primary && on ? kOnAccent : kInkSoft),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: primary && on ? kOnAccent : kInkSoft,
+                ),
+              ),
+            ],
           ),
         ),
       ),

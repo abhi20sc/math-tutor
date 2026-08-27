@@ -387,6 +387,167 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // The Learn path
+  // -------------------------------------------------------------------------
+  //
+  // Locking is the kind of rule that is easy to get subtly wrong and hard to
+  // notice: a hole in the line, or a wall at the start, both look like the
+  // app is broken rather than like a rule.
+  group('learn path', () {
+    Lesson lesson({
+      required int order,
+      bool read = false,
+      int solved = 0,
+      String? tag = 'factoring',
+    }) =>
+        Lesson(
+          id: order,
+          tag: tag,
+          subtopic: 'Factoring',
+          sortOrder: order,
+          title: 'Lesson $order',
+          summary: '',
+          readMinutes: 3,
+          hasVideo: false,
+          readAt: read ? DateTime(2026, 8, 1) : null,
+          readSeconds: read ? 120 : 0,
+          band: null,
+          firstLooks: 0,
+          solved: solved,
+        );
+
+    Lesson doneLesson(int order) =>
+        lesson(order: order, read: true, solved: Lesson.gateSize);
+
+    test('a fresh unit opens its first node and locks the rest', () {
+      final states = learnPathStates([for (var i = 1; i <= 4; i++) lesson(order: i)]);
+      expect(states.first, LessonNodeState.active);
+      expect(states.skip(1), everyElement(LessonNodeState.locked));
+    });
+
+    test('finishing a node opens exactly the next one', () {
+      final states = learnPathStates([
+        doneLesson(1),
+        lesson(order: 2),
+        lesson(order: 3),
+      ]);
+      expect(states, [
+        LessonNodeState.done,
+        LessonNodeState.active,
+        LessonNodeState.locked,
+      ]);
+    });
+
+    test('there is never more than one active node', () {
+      // Including the awkward case: a later lesson finished out of order,
+      // which can happen because Improve can send a student anywhere.
+      final states = learnPathStates([
+        lesson(order: 1),
+        doneLesson(2),
+        lesson(order: 3),
+      ]);
+      expect(states.where((s) => s == LessonNodeState.active).length, 1);
+    });
+
+    test('nothing after a locked node is ever open', () {
+      final states = learnPathStates([
+        doneLesson(1),
+        lesson(order: 2),
+        doneLesson(3),
+        lesson(order: 4),
+      ]);
+      var seenLocked = false;
+      for (final state in states) {
+        if (state == LessonNodeState.locked) seenLocked = true;
+        if (seenLocked) {
+          expect(state, isNot(LessonNodeState.active),
+              reason: 'the path has a hole in it');
+        }
+      }
+    });
+
+    test('a finished unit has no active node left', () {
+      final states = learnPathStates([doneLesson(1), doneLesson(2)]);
+      expect(states, everyElement(LessonNodeState.done));
+    });
+
+    test('reading alone does not finish a node that has a gate', () {
+      final read = lesson(order: 1, read: true, solved: 0);
+      expect(read.isRead, isTrue);
+      expect(read.gatePassed, isFalse);
+      expect(read.isComplete, isFalse);
+    });
+
+    test('passing the gate alone does not finish it either', () {
+      final drilled = lesson(order: 1, read: false, solved: Lesson.gateSize);
+      expect(drilled.gatePassed, isTrue);
+      expect(drilled.isComplete, isFalse);
+    });
+
+    test('a unit opener has no gate, so reading it is enough', () {
+      // A lesson with no subtopic has no questions to be tested on.
+      final opener = lesson(order: 1, read: true, tag: null);
+      expect(opener.hasGate, isFalse);
+      expect(opener.isComplete, isTrue);
+    });
+
+    test('a database without the migration locks nothing at all', () {
+      // The hazard this guards: without learn_journey.sql there is no
+      // solved column, every gate reads shut, and Learn becomes a wall at
+      // node one. A feature that works today must not be broken by a
+      // migration nobody has run yet.
+      final old = Lesson.fromJson({
+        'id': 1,
+        'tag': 'factoring',
+        'subtopic': 'Factoring',
+        'sort_order': 1,
+        'title': 'Lesson 1',
+        'summary': '',
+        'read_minutes': 3,
+        'has_video': false,
+        'read_at': '2026-08-01T00:00:00Z',
+        'read_seconds': 120,
+        'band': null,
+        'first_looks': 4,
+      });
+      expect(old.hasGateData, isFalse);
+      expect(old.solved, 0);
+
+      // Nothing locked, and a read lesson still reads as done.
+      final states = learnPathStates([old, old, old]);
+      expect(states, everyElement(LessonNodeState.done));
+      expect(states, isNot(contains(LessonNodeState.locked)));
+    });
+
+    test('one lesson missing the column unlocks the whole unit', () {
+      // Mixed payloads should not half-lock a path. If any row cannot
+      // answer, none of them locks.
+      final withData = doneLesson(1);
+      final without = Lesson.fromJson({
+        'id': 2,
+        'tag': 'factoring',
+        'subtopic': 'Factoring',
+        'sort_order': 2,
+        'title': 'Lesson 2',
+        'summary': '',
+        'read_minutes': 3,
+        'has_video': false,
+        'read_at': null,
+        'read_seconds': 0,
+        'band': null,
+        'first_looks': 0,
+      });
+      expect(learnPathStates([withData, without]),
+          isNot(contains(LessonNodeState.locked)));
+    });
+
+    test('the gate never reports more progress than its size', () {
+      final over = lesson(order: 1, solved: 99);
+      expect(over.gateProgress, Lesson.gateSize);
+    });
+  });
+
   testWidgets('an unopened subject says so rather than doing nothing',
       (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(
