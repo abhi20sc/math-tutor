@@ -1,162 +1,173 @@
 #!/usr/bin/env python3
-"""Astro Math Assist — brand mark and app icons.
+"""Astro STEM Labs — brand mark and app icons.
 
 THE MARK
 --------
-A parabola cradling a star.
+A rocket, in a gold-to-coral gradient, on a near-black rounded tile.
 
-The parabola is the one curve every course in this app shares: MPM2D is
-built on it, MHF4U generalises it, MCV4U differentiates it, and the very
-first lesson in the bank opens by throwing a basketball. The star is the
-"Astro". Together they read in one glance as maths-about-the-sky, and the
-silhouette — an open cup with a point of light inside it — survives being
-shrunk to a 16-pixel favicon, which a wordmark never would.
+This is not this app's own mark. It is the parent company's, taken from
+astrostemlabs.com by way of the topicmindmap app, so a student meets one
+identity across the website, the physics app and this one. The version that
+used to live here — a parabola cradling a star, drawn in the app's teal —
+was a good mark for a maths app and the wrong mark for one subject inside a
+STEM company. It is kept in git history.
 
-Drawn here rather than in SVG so the same geometry produces every size,
-supersampled 4x and stepped down with LANCZOS so the curve stays smooth at
-32 pixels. Nothing here depends on a font, so nothing silently falls back.
+The rocket is drawn rather than illustrated, for the same reason the
+parabola was: one geometry produces every size, supersampled 4x and stepped
+down with LANCZOS, so the silhouette survives being shrunk to a 16-pixel
+favicon. Nothing here depends on a font, so nothing silently falls back.
+
+The gradient runs top-left to bottom-right at the same angle as
+kBrandGradient in lib/main.dart. If one moves, move the other.
 
 COLOURS
 -------
-Teal is the app's existing accent (kAccent in main.dart); the gold is the
-gold medal already used on MedalDot. Both are lifted from the running app
-rather than invented, so the icon and the interface agree.
+Fixed in both themes, unlike everything else in the app. See the note on
+BrandBadge in lib/main.dart: a mark that restyles itself is not a mark.
 
 OUTPUTS  (web/)
-    favicon.png              64x64   teal mark, transparent
-    icons/Icon-192.png       192     teal mark, transparent
-    icons/Icon-512.png       512     teal mark, transparent
-    icons/Icon-maskable-192  192     full-bleed teal, cream mark
-    icons/Icon-maskable-512  512     full-bleed teal, cream mark
-    brand/wordmark.png               for docs and the brand sheet
+    favicon.png              64x64   rocket on the badge tile
+    icons/Icon-192.png       192     rocket on the badge tile
+    icons/Icon-512.png       512     rocket on the badge tile
+    icons/Icon-maskable-192  192     full-bleed badge, rocket inset for the
+    icons/Icon-maskable-512  512     safe zone Android crops to a circle
+    brand/app_tile.png       1024    the badge at press size
+    brand/mark_rocket.png    1024    the rocket alone, transparent
 """
 
-import math
 import os
+
 from PIL import Image, ImageDraw
 
-TEAL = (47, 111, 98, 255)        # #2F6F62  kAccent
-TEAL_DEEP = (32, 81, 74, 255)    # #20514A  kAccentDeep
-CREAM = (246, 245, 241, 255)     # #F6F5F1  kSurface
-GOLD = (199, 154, 46, 255)       # #C79A2E  MedalDot gold
-GOLD_BRIGHT = (224, 180, 74, 255)
+BADGE_INK = (18, 25, 43, 255)     # #12192B  kBrandBadgeInk
+GOLD = (244, 169, 59, 255)        # #F4A93B  kBrandGold
+CORAL = (232, 96, 76, 255)        # #E8604C  kBrandCoral
 
 SS = 4  # supersample factor
 
 
-def parabola_points(cx, cy_vertex, half_width, rise, n=400):
-    """Points along y = vertex - a*x^2, sampled evenly in x."""
-    a = rise / (half_width ** 2)
-    pts = []
-    for i in range(n + 1):
-        x = -half_width + (2 * half_width) * i / n
-        pts.append((cx + x, cy_vertex - a * x * x))
-    return pts
+def gradient_box(w, h, a=GOLD, b=CORAL):
+    """The brand gradient as a w x h image, top-left to bottom-right.
 
-
-def thick_stroke(d, pts, width, colour):
-    """Fill a constant-width band around a polyline.
-
-    PIL's line(width=..., joint='curve') draws each segment as its own
-    quadrilateral, which leaves hairline seams along the inside of a tight
-    curve — visible as white slashes once the icon is scaled down. Offsetting
-    the path along its normals and filling one closed polygon avoids them
-    entirely.
+    Built per-pixel along the diagonal rather than as a vertical ramp,
+    because a 45-degree gradient faked with a vertical one goes flat exactly
+    where the rocket is widest.
     """
-    r = width / 2.0
-    left, right = [], []
-    n = len(pts)
-    for i, (x, y) in enumerate(pts):
-        px, py = pts[max(i - 1, 0)]
-        nx, ny = pts[min(i + 1, n - 1)]
-        tx, ty = nx - px, ny - py
-        m = math.hypot(tx, ty) or 1.0
-        ox, oy = -ty / m * r, tx / m * r      # unit normal * radius
-        left.append((x + ox, y + oy))
-        right.append((x - ox, y - oy))
-    d.polygon(left + right[::-1], fill=colour)
-    for (ex, ey) in (pts[0], pts[-1]):        # round the open ends
-        d.ellipse([ex - r, ey - r, ex + r, ey + r], fill=colour)
+    img = Image.new("RGBA", (max(w, 1), max(h, 1)))
+    px = img.load()
+    for y in range(img.height):
+        for x in range(img.width):
+            # 0 at top-left, 1 at bottom-right of this box.
+            fx = x / (img.width - 1) if img.width > 1 else 0.0
+            fy = y / (img.height - 1) if img.height > 1 else 0.0
+            t = (fx + fy) / 2
+            px[x, y] = tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(4))
+    return img
 
 
-def star_polygon(cx, cy, outer, inner, points=6, rotation=-math.pi / 2):
-    """A regular star. Six points reads as a star at any size; five reads
-    as a sheriff's badge once it is small enough to lose its proportions."""
-    verts = []
-    for i in range(points * 2):
-        r = outer if i % 2 == 0 else inner
-        ang = rotation + math.pi * i / points
-        verts.append((cx + r * math.cos(ang), cy + r * math.sin(ang)))
-    return verts
+# The fuselage as ONE closed outline, tip first and down the right side.
+# Drawn as a single polygon rather than a cone stacked on a capsule: where
+# a triangle's base meets a rounded rectangle's top, the rectangle's corners
+# poke out past the triangle's edges and the join reads as two small
+# shoulders. Cheaper to draw the silhouette once than to fight the seam.
+_FUSELAGE = [
+    (0.500, 0.055),
+    (0.556, 0.205), (0.590, 0.330), (0.606, 0.450),
+    (0.612, 0.560), (0.612, 0.700),
+    (0.588, 0.762), (0.412, 0.762),
+    (0.388, 0.700), (0.388, 0.560),
+    (0.394, 0.450), (0.410, 0.330), (0.444, 0.205),
+]
 
 
-def draw_mark(size, curve_colour, star_colour, bg=None, scale=1.0,
-              corner_radius=None):
-    """Render the mark at `size` px. `scale` shrinks the artwork inside the
-    canvas — maskable icons need everything inside the middle 80%."""
-    S = size * SS
-    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
+def rocket_mask(size):
+    """The rocket silhouette, white on black, as an alpha source.
 
-    if bg is not None:
-        if corner_radius:
-            d.rounded_rectangle([0, 0, S - 1, S - 1],
-                                radius=int(corner_radius * S), fill=bg)
-        else:
-            d.rectangle([0, 0, S - 1, S - 1], fill=bg)
+    Proportions are set against `size` so the shape scales exactly. The
+    window is punched back OUT of the fuselage — that hole is what stops
+    the shape reading as a plain arrowhead once it is 32 pixels wide.
+    """
+    m = Image.new("L", (size, size), 0)
+    d = ImageDraw.Draw(m)
+    s = size
 
-    cx = S / 2
-    box = S * scale                  # artwork box, centred
-    # Proportions: deep enough that the artwork fills a square instead of
-    # sitting in a wide, short band, shallow enough at the vertex that it
-    # still reads as a curve rather than a V.
-    half_width = box * 0.410
-    rise = box * 0.700
-    stroke = box * 0.098
-    vertex_y = S / 2 + rise / 2      # centres the artwork's bounding box
+    # Fins, first, so the fuselage draws over where they meet it.
+    d.polygon([(0.392 * s, 0.545 * s), (0.225 * s, 0.790 * s),
+               (0.392 * s, 0.735 * s)], fill=255)
+    d.polygon([(0.608 * s, 0.545 * s), (0.775 * s, 0.790 * s),
+               (0.608 * s, 0.735 * s)], fill=255)
+    d.polygon([(x * s, y * s) for x, y in _FUSELAGE], fill=255)
 
-    thick_stroke(d, parabola_points(cx, vertex_y, half_width, rise),
-                 stroke, curve_colour)
+    # Exhaust, detached from the fins so the two do not read as one wedge.
+    d.polygon([(0.452 * s, 0.800 * s), (0.500 * s, 0.945 * s),
+               (0.548 * s, 0.800 * s)], fill=255)
 
-    # The star sits inside the cup with clear space all round it, high
-    # enough that its lower point never touches the curve.
-    star_cy = vertex_y - box * 0.300
-    outer = box * 0.132
-    d.polygon(star_polygon(cx, star_cy, outer, outer * 0.40),
-              fill=star_colour)
+    # Window.
+    d.ellipse([0.447 * s, 0.345 * s, 0.553 * s, 0.451 * s], fill=0)
+    return m
 
+
+def badge(size, inset=1.0, tile=True, radius=0.26):
+    """One rendered mark.
+
+    inset shrinks the rocket without shrinking the tile, which is what the
+    maskable icons need: Android crops them to a circle and anything in the
+    outer ~10% can be cut.
+    """
+    big = size * SS
+    img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+
+    if tile:
+        tile_img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+        ImageDraw.Draw(tile_img).rounded_rectangle(
+            [0, 0, big - 1, big - 1], radius=radius * big, fill=BADGE_INK)
+        img.alpha_composite(tile_img)
+
+    inner = round(big * 0.66 * inset)
+    mask = rocket_mask(inner)
+    # The gradient is built across the rocket's own bounding box, not the
+    # square it is drawn in. Over the full square the mark only samples the
+    # middle third of the ramp and comes out one flat orange — which is
+    # what the first render of this did.
+    box = mask.getbbox()
+    grad = Image.new("RGBA", (inner, inner), (0, 0, 0, 0))
+    grad.paste(gradient_box(box[2] - box[0], box[3] - box[1]), (box[0], box[1]))
+    grad.putalpha(mask)
+    img.alpha_composite(grad, (round((big - inner) / 2),
+                               round((big - inner) / 2)))
     return img.resize((size, size), Image.LANCZOS)
 
 
 def main():
-    out = os.path.join(os.path.dirname(__file__), "out")
-    icons = os.path.join(out, "icons")
-    os.makedirs(icons, exist_ok=True)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    web = os.path.join(root, "web")
+    icons = os.path.join(web, "icons")
+    brand = os.path.join(root, "brand")
+    for d in (icons, brand):
+        os.makedirs(d, exist_ok=True)
 
-    # Transparent-background marks: browser tab, and Android "any" purpose.
-    for name, size in (("favicon.png", 64),):
-        draw_mark(size, TEAL, GOLD).save(os.path.join(out, name))
+    badge(64).save(os.path.join(web, "favicon.png"))
     for size in (192, 512):
-        draw_mark(size, TEAL, GOLD).save(
-            os.path.join(icons, "Icon-%d.png" % size))
+        badge(size).save(os.path.join(icons, f"Icon-{size}.png"))
+        # Full bleed, square corners, rocket pulled well inside the safe
+        # zone — Android masks these to whatever shape the launcher uses.
+        badge(size, inset=0.72, radius=0.0).save(
+            os.path.join(icons, f"Icon-maskable-{size}.png"))
 
-    # Maskable: full bleed, artwork inside the middle 80% so a circular or
-    # squircle crop never clips the curve's arms.
-    for size in (192, 512):
-        draw_mark(size, CREAM, GOLD_BRIGHT, bg=TEAL_DEEP, scale=0.62).save(
-            os.path.join(icons, "Icon-maskable-%d.png" % size))
+    badge(1024).save(os.path.join(brand, "app_tile.png"))
+    badge(1024, tile=False).save(os.path.join(brand, "mark_rocket.png"))
 
-    # A larger square lockup for docs, the brand sheet and any store listing.
-    draw_mark(1024, CREAM, GOLD_BRIGHT, bg=TEAL_DEEP, scale=0.60,
-              corner_radius=0.22).save(os.path.join(out, "app_tile.png"))
-    draw_mark(1024, TEAL, GOLD).save(os.path.join(out, "mark_teal.png"))
-
-    for root, _, files in os.walk(out):
-        for f in sorted(files):
-            p = os.path.join(root, f)
-            print("%-34s %6d bytes  %s" % (
-                os.path.relpath(p, out), os.path.getsize(p),
-                Image.open(p).size))
+    print("Wrote:")
+    for path in (
+        os.path.join(web, "favicon.png"),
+        os.path.join(icons, "Icon-192.png"),
+        os.path.join(icons, "Icon-512.png"),
+        os.path.join(icons, "Icon-maskable-192.png"),
+        os.path.join(icons, "Icon-maskable-512.png"),
+        os.path.join(brand, "app_tile.png"),
+        os.path.join(brand, "mark_rocket.png"),
+    ):
+        print("  " + os.path.relpath(path, root))
 
 
 if __name__ == "__main__":

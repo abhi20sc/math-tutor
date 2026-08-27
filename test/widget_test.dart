@@ -149,4 +149,99 @@ void main() {
     await tester.tap(find.text('Map'));
     expect(picked, 0);
   });
+
+  // -------------------------------------------------------------------------
+  // The theme
+  // -------------------------------------------------------------------------
+  //
+  // These exist because the dark theme shipped with the band colours, the
+  // unit hues and a dozen panel fills still set to their daylight values,
+  // and nothing caught it. Every one of them looked fine in review, because
+  // review happened in the light theme.
+  //
+  // The rule each test below pins is the same one: a colour that carries
+  // meaning has to be READ FROM THE PALETTE, not written down once.
+  group('palette', () {
+    tearDown(() => kPalette = AstroPalette.light);
+
+    test('every band word changes between the two themes', () {
+      kPalette = AstroPalette.light;
+      final light = [for (final b in Band.values) bandTextColour(b)];
+      kPalette = AstroPalette.dark;
+      final dark = [for (final b in Band.values) bandTextColour(b)];
+
+      for (var i = 0; i < Band.values.length; i++) {
+        expect(dark[i], isNot(light[i]),
+            reason: '${Band.values[i]} reuses its light colour in the dark');
+      }
+    });
+
+    test('every band fill changes between the two themes', () {
+      kPalette = AstroPalette.light;
+      final light = [for (final b in Band.values) bandColour(b)];
+      kPalette = AstroPalette.dark;
+      final dark = [for (final b in Band.values) bandColour(b)];
+
+      for (var i = 0; i < Band.values.length; i++) {
+        expect(dark[i], isNot(light[i]));
+      }
+    });
+
+    test('a unit keeps its slot in both themes, and changes colour', () {
+      kPalette = AstroPalette.light;
+      final lightIndex = tintIndex('Factoring');
+      final lightColour = unitTint('Factoring');
+      kPalette = AstroPalette.dark;
+
+      // The SLOT is derived from the name and must not move, or a student
+      // switching to dark would see every unit change identity at once.
+      expect(tintIndex('Factoring'), lightIndex);
+      expect(unitTint('Factoring'), isNot(lightColour));
+    });
+
+    test('both palettes carry a full set of bands and tints', () {
+      for (final p in [AstroPalette.light, AstroPalette.dark]) {
+        expect(p.bandFill.length, Band.values.length);
+        expect(p.bandText.length, Band.values.length);
+        expect(p.unitTints.length, 8);
+        expect(p.unitTintsDeep.length, p.unitTints.length);
+      }
+    });
+
+    test('the brand mark does not change with the theme', () {
+      // Fixed on purpose: it is the parent company's mark, not this app's.
+      kPalette = AstroPalette.dark;
+      expect(kBrandBadgeInk, const Color(0xFF12192B));
+      expect(kBrandGold, const Color(0xFFF4A93B));
+      expect(kBrandCoral, const Color(0xFFE8604C));
+    });
+  });
+
+  testWidgets('the subject switcher offers three subjects, one of them open',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: SubjectSwitcher()),
+    ));
+
+    for (final subject in AstroSubject.values) {
+      expect(find.text(subject.label), findsOneWidget);
+    }
+
+    // Exactly one is open, and it is maths. If a second ever goes true
+    // without a course behind it, this is what says so.
+    final open = AstroSubject.values.where((s) => s.available).toList();
+    expect(open, [AstroSubject.maths]);
+  });
+
+  testWidgets('an unopened subject says so rather than doing nothing',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: SubjectSwitcher()),
+    ));
+
+    await tester.tap(find.text('Physics'));
+    await tester.pump();
+
+    expect(find.textContaining('on the way'), findsOneWidget);
+  });
 }

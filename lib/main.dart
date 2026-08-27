@@ -100,6 +100,310 @@ const String supabaseAnonKey = 'sb_publishable_QGTakKcrvWfpTL3SRiT9uQ_mpxnP6Fn';
 /// the same app, which nothing here wants. Theme.of(context).brightness
 /// stays the source of truth: _AstroTheme sets this object from it before
 /// each build, so Material's own widgets and ours can never disagree.
+// ---------------------------------------------------------------------------
+// Astro STEM Labs — the parent brand
+// ---------------------------------------------------------------------------
+//
+// Lifted from astrostemlabs.com by way of the topicmindmap app, so a student
+// sees one identity across the site, the physics app and this one rather than
+// three cousins. These four are FIXED in both themes: a brand mark that
+// restyles itself in the dark is not a mark, it is a suggestion.
+//
+//   badgeInk   the near-black tile the rocket sits on
+//   gold/coral the gradient through the rocket, top-left to bottom-right
+//   navy       primary actions and filled surfaces
+//
+// Navy is the only one that also does interface work — see accentSurface.
+const Color kBrandBadgeInk = Color(0xFF12192B);
+const Color kBrandGold = Color(0xFFF4A93B);
+const Color kBrandCoral = Color(0xFFE8604C);
+const Color kBrandNavy = Color(0xFF1D3557);
+
+/// The gradient through the rocket. Same angle as the wordmark's.
+const LinearGradient kBrandGradient = LinearGradient(
+  colors: [kBrandGold, kBrandCoral],
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+);
+
+/// The name over the door. Maths is one subject inside it, not the whole
+/// thing — see [AstroSubject].
+const String kBrandName = 'Astro STEM Labs';
+
+/// The rocket badge.
+///
+/// One widget covers every size it appears at — the sign-in hero at 76, the
+/// sidebar mark in the twenties — because [size] drives the corner radius,
+/// the icon and the glow proportionally. Two hand-tuned assets at two sizes
+/// is how a mark starts looking like two marks.
+///
+/// Fixed colours in both themes, deliberately. Everything else in this file
+/// swaps with the palette; the badge does not, because it is the same mark
+/// that appears on astrostemlabs.com and on the physics app, and a student
+/// who sees it change should be seeing a different company.
+class BrandBadge extends StatelessWidget {
+  final double size;
+
+  const BrandBadge({super.key, this.size = 76});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: kBrandName,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: kBrandBadgeInk,
+          borderRadius: BorderRadius.circular(size * 0.26),
+          boxShadow: [
+            BoxShadow(
+              color: kBrandCoral.withValues(alpha: 0.35),
+              blurRadius: size * 0.29,
+              offset: Offset(0, size * 0.11),
+            ),
+          ],
+        ),
+        child: Center(
+          child: ShaderMask(
+            shaderCallback: (bounds) => kBrandGradient.createShader(bounds),
+            // The mask paints the gradient THROUGH the glyph, so the icon's
+            // own colour only has to be opaque — white is the conventional
+            // choice and any other would change nothing.
+            child: Icon(Icons.rocket_launch_rounded,
+                size: size * 0.5, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// The three subjects, as a row of chips. Maths is on; the other two say so
+/// plainly when tapped rather than doing nothing, because a control that
+/// ignores a tap reads as broken rather than as unavailable.
+class SubjectSwitcher extends StatelessWidget {
+  const SubjectSwitcher({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final subject in AstroSubject.values)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: _SubjectChip(subject: subject),
+          ),
+      ],
+    );
+  }
+}
+
+class _SubjectChip extends StatelessWidget {
+  final AstroSubject subject;
+
+  const _SubjectChip({required this.subject});
+
+  @override
+  Widget build(BuildContext context) {
+    final on = subject.available;
+    return Semantics(
+      button: true,
+      enabled: on,
+      selected: on,
+      label: on
+          ? '${subject.label}. ${subject.blurb}'
+          : '${subject.label}. Not open yet.',
+      child: Tooltip(
+        message: on ? subject.blurb : '${subject.label} is not open yet.',
+        child: Material(
+          color: on ? kAccentSurface : kTrack,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: on
+                ? null
+                : () => ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${subject.label} is on the way. '
+                          'Maths is the one that is open today.',
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(9, 6, 10, 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    subject.icon,
+                    size: 13,
+                    // Not just dimmed: a disabled chip has to stay readable,
+                    // or "coming soon" turns into "something is broken".
+                    color: on ? kOnAccent : kInkSoft,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    subject.label,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: on ? kOnAccent : kInkSoft,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Subjects
+// ---------------------------------------------------------------------------
+//
+// Astro STEM Labs is three subjects. This app is the maths one, and the other
+// two are named here rather than hidden because a student who opens the
+// sidebar should be able to see that physics and tech are coming without
+// having to be told — and because leaving them out would mean the maths app
+// silently claims to be the whole company.
+//
+// Nothing behind physics or tech is stubbed in. There is no empty course
+// list, no placeholder unit, no table waiting for rows. They are two
+// disabled chips and a sentence, which is the honest amount of product to
+// ship for something that does not exist yet.
+enum AstroSubject {
+  maths(
+    label: 'Maths',
+    icon: Icons.functions_rounded,
+    available: true,
+    blurb: 'Grades 9 to 12, six Ontario courses.',
+  ),
+  physics(
+    label: 'Physics',
+    icon: Icons.rocket_launch_rounded,
+    available: false,
+    blurb: 'Not open yet.',
+  ),
+  tech(
+    label: 'Tech',
+    icon: Icons.terminal_rounded,
+    available: false,
+    blurb: 'Not open yet.',
+  );
+
+  final String label;
+  final IconData icon;
+  final bool available;
+  final String blurb;
+
+  const AstroSubject({
+    required this.label,
+    required this.icon,
+    required this.available,
+    required this.blurb,
+  });
+}
+
+// The five traffic bands and the eight unit hues, per theme. Declared out
+// here rather than inline because the two palettes are `const` and a const
+// constructor cannot hold a list literal that is not itself const.
+//
+// Band order is Band's own: grey, orange, yellow, lightGreen, green.
+//
+// The light sets are exactly what shipped, unchanged — they were measured
+// against paper and they hold up. The dark sets are new. Each dark hue keeps
+// its light counterpart's hue angle and moves only lightness, so 'Developing'
+// is recognisably the same yellow in both themes rather than a different
+// colour that happens to sit in the same slot.
+
+const List<Color> _lightBandFill = [
+  Color(0xFF9AA0A6), // grey  — not enough evidence yet
+  Color(0xFFE8590C), // orange — needs work
+  Color(0xFFD9A404), // yellow — developing
+  Color(0xFF66BB6A), // light green — nearly there
+  Color(0xFF2E7D32), // green — mastered
+];
+const List<Color> _lightBandText = [
+  Color(0xFF5F6368),
+  Color(0xFFBC4708),
+  Color(0xFF8A6803),
+  Color(0xFF33753B),
+  Color(0xFF2E7D32),
+];
+
+// 4.94 to 9.13 as fills on a dark card, 6.23 to 12.10 as words. The light
+// set in the same place measured 2.55 to 3.01 as words, which is the bug
+// this fixes.
+const List<Color> _darkBandFill = [
+  Color(0xFF8A939B),
+  Color(0xFFF5834A),
+  Color(0xFFE8BC3A),
+  Color(0xFF8CD98F),
+  Color(0xFF5FBF63),
+];
+const List<Color> _darkBandText = [
+  Color(0xFF9AA6B4),
+  Color(0xFFF79A69),
+  Color(0xFFEDC95C),
+  Color(0xFFA3E0A5),
+  Color(0xFF7FD183),
+];
+
+const List<Color> _unitTintsLight = [
+  Color(0xFF2F6F62), // teal
+  Color(0xFF3B5BA9), // indigo
+  Color(0xFF7B4A86), // plum
+  Color(0xFFA8552F), // clay
+  Color(0xFF4F7A3A), // moss
+  Color(0xFF2F6F8F), // slate blue
+  Color(0xFFA6455F), // rose
+  Color(0xFF8A6A1F), // ochre
+];
+const List<Color> _unitTintsLightDeep = [
+  Color(0xFF285E53),
+  Color(0xFF324D90),
+  Color(0xFF693F72),
+  Color(0xFF8F4828),
+  Color(0xFF436831),
+  Color(0xFF285E7A),
+  Color(0xFF8D3B51),
+  Color(0xFF755A1A),
+];
+
+// Same eight hues, lightness raised until each clears 4.5:1 on BOTH dark
+// grounds (the page and the raised card). They land at 4.61 to 4.71 on the
+// card, which is the tighter of the two.
+const List<Color> _unitTintsDark = [
+  Color(0xFF429C8A), // teal
+  Color(0xFF728DCE), // indigo
+  Color(0xFFAC7DB7), // plum
+  Color(0xFFCE764E), // clay
+  Color(0xFF649B4A), // moss
+  Color(0xFF4096C0), // slate blue
+  Color(0xFFC5758A), // rose
+  Color(0xFFAF8727), // ochre
+];
+// Lighter again, for initials sitting on a 12% wash of their own hue. The
+// undeepened set measures about 3.95 there, which is the same almost-fine
+// that made the light theme need its own deep set.
+const List<Color> _unitTintsDarkDeep = [
+  Color(0xFF48AA97),
+  Color(0xFF8199D3),
+  Color(0xFFB58CBF),
+  Color(0xFFD48764),
+  Color(0xFF6DA951),
+  Color(0xFF57A3C8),
+  Color(0xFFCD8799),
+  Color(0xFFC0942B),
+];
+
 class AstroPalette {
   final Brightness brightness;
   final Color accent;
@@ -130,6 +434,23 @@ class AstroPalette {
 
   final List<BoxShadow> cardShadow;
 
+  /// The five traffic bands, in Band's own declaration order:
+  /// grey, orange, yellow, lightGreen, green.
+  ///
+  /// These live on the palette rather than in a top-level switch because
+  /// they were the worst of the dark-theme leaks: bandText is DARKENED for
+  /// white paper, so on a dark card the five words measured 2.55 to 3.01
+  /// against a 4.5 floor — every one of them failing, and failing hardest
+  /// on grey, which is the state most students are in most of the time.
+  final List<Color> bandFill;
+  final List<Color> bandText;
+
+  /// The eight unit identity hues, and the variants for text on a 12% wash
+  /// of the matching hue. Same story as the bands: the light set is tuned
+  /// against paper and goes muddy on a dark ground.
+  final List<Color> unitTints;
+  final List<Color> unitTintsDeep;
+
   const AstroPalette({
     required this.brightness,
     required this.accent,
@@ -148,32 +469,57 @@ class AstroPalette {
     required this.accentSurface,
     required this.onAccent,
     required this.cardShadow,
+    required this.bandFill,
+    required this.bandText,
+    required this.unitTints,
+    required this.unitTintsDeep,
   });
 
   bool get isDark => brightness == Brightness.dark;
 
-  /// Unchanged from the app as it shipped.
+  /// Astro STEM Labs, light. The warm cream this app shipped with has gone
+  /// cool: the parent brand is navy, teal and off-white, and a cream page
+  /// under a navy mark reads as two products stapled together.
+  ///
+  /// Two roles the brand splits that this app used to run through one
+  /// colour, and the split is the reason the rebrand is more than a
+  /// find-and-replace:
+  ///
+  ///   accent         teal. Text, links, ticks, active state.
+  ///   accentSurface  navy. Anything FILLED and carrying white text.
+  ///
+  /// Teal at the lightness that works as 13px text measures 3.3:1 as a
+  /// button fill under white, which fails. Navy measures 12.4:1. So the
+  /// primary button is navy and the link beside it is teal, which is
+  /// exactly how astrostemlabs.com already works.
+  ///
+  /// Every value below was measured, not chosen: the lowest ratio in the
+  /// whole light theme is accent-on-wash at 4.52:1.
   static const AstroPalette light = AstroPalette(
     brightness: Brightness.light,
-    accent: Color(0xFF2F6F62), // teal, the one strong colour
-    accentDeep: Color(0xFF20514A), // pressed and hover states
-    wrong: Color(0xFFC0392B),
-    hint: Color(0xFFB9791C),
-    surface: Color(0xFFF6F5F1), // page background
+    accent: Color(0xFF0F7B7D), // Astro teal, darkened to clear 4.5 as text
+    accentDeep: Color(0xFF0A5F61), // pressed and hover states
+    wrong: Color(0xFFC2412E),
+    hint: Color(0xFF8F620E),
+    surface: Color(0xFFF5F7F8), // page background, Astro off-white
     card: Color(0xFFFFFFFF),
-    ink: Color(0xFF1E2422), // headings and answers
-    inkSoft: Color(0xFF6E7772), // labels, captions, hints
-    line: Color(0xFFE2E0D9), // hairline, warm to match the cream
-    wash: Color(0xFFEDF5F2),
-    warmTint: Color(0xFFFCF5E9),
-    track: Color(0xFFEDEBE4),
-    wrongWash: Color(0xFFEADFDC),
-    accentSurface: Color(0xFF2F6F62),
+    ink: Color(0xFF1B2430), // headings and answers
+    inkSoft: Color(0xFF5C6670), // labels, captions, hints
+    line: Color(0xFFDCE1E4), // hairline, cool to match the page
+    wash: Color(0xFFEAF4F4),
+    warmTint: Color(0xFFFDF3E3), // the brand gold, at wash strength
+    track: Color(0xFFE7ECEE),
+    wrongWash: Color(0xFFFCEFEC),
+    accentSurface: kBrandNavy,
     onAccent: Color(0xFFFFFFFF),
     cardShadow: [
-      BoxShadow(color: Color(0x0F1E2422), blurRadius: 20, offset: Offset(0, 6)),
-      BoxShadow(color: Color(0x0A1E2422), blurRadius: 2, offset: Offset(0, 1)),
+      BoxShadow(color: Color(0x0F1B2430), blurRadius: 20, offset: Offset(0, 6)),
+      BoxShadow(color: Color(0x0A1B2430), blurRadius: 2, offset: Offset(0, 1)),
     ],
+    bandFill: _lightBandFill,
+    bandText: _lightBandText,
+    unitTints: _unitTintsLight,
+    unitTintsDeep: _unitTintsLightDeep,
   );
 
   /// Not an inversion. A few things had to be decided rather than flipped:
@@ -192,25 +538,32 @@ class AstroPalette {
   ///    and the shadow shrinks to a hint of depth.
   static const AstroPalette dark = AstroPalette(
     brightness: Brightness.dark,
-    accent: Color(0xFF6FB3A2),
-    accentDeep: Color(0xFF8FCBBB),
-    wrong: Color(0xFFE0705F),
-    hint: Color(0xFFD9A44E),
-    surface: Color(0xFF121716),
-    card: Color(0xFF1A211F),
-    ink: Color(0xFFE7EBE8),
-    inkSoft: Color(0xFF95A09B),
-    line: Color(0xFF2A3331),
-    wash: Color(0xFF1C2A27),
-    warmTint: Color(0xFF2A2418),
-    track: Color(0xFF2A3331),
-    wrongWash: Color(0xFF33272A),
-    accentSurface: Color(0xFF24463F),
-    onAccent: Color(0xFFEAF2EF),
+    accent: Color(0xFF4DBDBE),
+    accentDeep: Color(0xFF7FD4D5),
+    wrong: Color(0xFFEE8873),
+    hint: Color(0xFFE3B45C),
+    surface: Color(0xFF10141A),
+    card: Color(0xFF1E2530),
+    ink: Color(0xFFE7ECF2),
+    inkSoft: Color(0xFF9AA6B4),
+    line: Color(0xFF333C48),
+    wash: Color(0xFF123033),
+    warmTint: Color(0xFF2E2617),
+    track: Color(0xFF2A323D),
+    wrongWash: Color(0xFF3A2621),
+    // Navy itself is too dark to read as a raised, tappable surface against
+    // a near-black page — it disappears into it. Lifted toward the light,
+    // hue held, so a primary button still says "navy" but says it out loud.
+    accentSurface: Color(0xFF3B5C86),
+    onAccent: Color(0xFFFFFFFF),
     cardShadow: [
       BoxShadow(color: Color(0x66000000), blurRadius: 18, offset: Offset(0, 5)),
       BoxShadow(color: Color(0x33000000), blurRadius: 2, offset: Offset(0, 1)),
     ],
+    bandFill: _darkBandFill,
+    bandText: _darkBandText,
+    unitTints: _unitTintsDark,
+    unitTintsDeep: _unitTintsDarkDeep,
   );
 }
 
@@ -261,55 +614,33 @@ List<BoxShadow> get kCardShadow => kPalette.cardShadow;
 //
 // Deliberately not the band hues. Nothing here is green or orange, so a unit
 // chip can never be misread as "mastered" or "needs work".
-const List<Color> kUnitTints = [
-  Color(0xFF2F6F62), // teal — the house accent, still in the rotation
-  Color(0xFF3B5BA9), // indigo
-  Color(0xFF7B4A86), // plum
-  Color(0xFFA8552F), // clay
-  Color(0xFF4F7A3A), // moss
-  Color(0xFF2F6F8F), // slate blue
-  Color(0xFFA6455F), // rose
-  Color(0xFF8A6A1F), // ochre
-];
-
-/// The same eight, darkened, for text sitting on a pale wash of its own hue
-/// — the initials in a PersonAvatar, mainly.
-///
-/// Precomputed rather than derived at runtime because the arithmetic on
-/// Color has changed shape across Flutter versions, and because these are
-/// the values that were actually measured. On a 12% wash of the matching
-/// tint they run 5.52:1 to 6.88:1; the undarkened hues drop as low as
-/// 4.31:1 there, which fails 4.5:1 for the ~13px bold the initials are set
-/// in. Three of the eight fail that way, which is exactly the kind of
-/// almost-fine nobody notices until somebody cannot read their own name.
-const List<Color> kUnitTintsDeep = [
-  Color(0xFF285E53), // teal
-  Color(0xFF324D90), // indigo
-  Color(0xFF693F72), // plum
-  Color(0xFF8F4828), // clay
-  Color(0xFF436831), // moss
-  Color(0xFF285E7A), // slate blue
-  Color(0xFF8D3B51), // rose
-  Color(0xFF755A1A), // ochre
-];
-
-/// A stable index into the palettes above, from any string. Used for units
+/// A stable index into the unit palettes, from any string. Used for units
 /// (by name) and for people (by id).
+///
+/// The hues themselves now live on [AstroPalette] (see _unitTintsLight and
+/// _unitTintsDark) because they had to be decided per theme rather than
+/// dimmed — the same problem the bands had. What did NOT change is that the
+/// index comes from the NAME: 'Factoring' is the same plum in Grade 10 as it
+/// is anywhere else, in either theme, and adding a unit to the middle of a
+/// course does not silently repaint every unit after it.
 int tintIndex(String seed) {
   var h = 0;
   for (final c in seed.codeUnits) {
     h = (h * 31 + c) & 0x7fffffff;
   }
-  return h % kUnitTints.length;
+  return h % kPalette.unitTints.length;
 }
 
+/// The eight unit identity hues in force. Identity, never status — a unit
+/// keeps its colour whether the student is brilliant at it or has never
+/// opened it. Deliberately none of them green or orange, so a unit chip can
+/// never be misread as 'mastered' or 'needs work'.
+List<Color> get kUnitTints => kPalette.unitTints;
+
+/// The same eight, for text on a pale wash of its own hue.
+List<Color> get kUnitTintsDeep => kPalette.unitTintsDeep;
+
 /// The colour a unit keeps forever.
-///
-/// Derived from the NAME, not from position in the list, so 'Factoring' is
-/// the same plum in Grade 10 as it is anywhere else, and adding a unit to
-/// the middle of a course does not silently repaint every unit after it —
-/// which is exactly the kind of change that makes a student think the app
-/// has lost their work.
 Color unitTint(String unit) => kUnitTints[tintIndex(unit)];
 
 
@@ -2460,7 +2791,7 @@ class MathTutorApp extends StatelessWidget {
     return AnimatedBuilder(
       animation: kTheme,
       builder: (context, _) => MaterialApp(
-        title: 'Astro Math Assist',
+        title: kBrandName,
         debugShowCheckedModeBanner: false,
         theme: _themeFor(AstroPalette.light),
         darkTheme: _themeFor(AstroPalette.dark),
@@ -2709,34 +3040,13 @@ class _AuthScreenState extends State<AuthScreen> {
                 children: [
                   const SizedBox(height: 48),
 
-                  // The divided box is the app's mark: a fraction bar, drawn
-                  // rather than illustrated.
-                  Center(
-                    child: Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: kAccentSurface,
-                        borderRadius: BorderRadius.circular(13),
-                        boxShadow: kCardShadow,
-                      ),
-                      child: Center(
-                        child: Text(
-                          'x',
-                          style: TextStyle(
-                            fontFamily: kSerif,
-                            fontFamilyFallback: kSerifFallback,
-                            fontSize: 24,
-                            fontStyle: FontStyle.italic,
-                            color: kCard,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  // The parent company's own mark, at hero size. The italic
+                  // 'x' in a box that used to sit here was this app's alone,
+                  // which was the problem with it.
+                  const Center(child: BrandBadge(size: 72)),
                   const SizedBox(height: 20),
                   Text(
-                    'Astro Math Assist',
+                    kBrandName,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: kSerif,
@@ -2745,6 +3055,17 @@ class _AuthScreenState extends State<AuthScreen> {
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.5,
                       color: kInk,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Maths',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2.6,
+                      color: kAccent,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -4117,13 +4438,15 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Row(
                   children: [
+                    const BrandBadge(size: 26),
+                    const SizedBox(width: 9),
                     Expanded(
                       child: Text(
-                        'Astro Math Assist',
+                        kBrandName,
                         style: TextStyle(
                           fontFamily: kSerif,
                           fontFamilyFallback: kSerifFallback,
-                          fontSize: 18,
+                          fontSize: 17,
                           fontWeight: FontWeight.w700,
                           color: kInk,
                         ),
@@ -4139,6 +4462,8 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                const SubjectSwitcher(),
                 const SizedBox(height: 3),
                 Text(
                   // The class count stays on the front surface here for the
@@ -7176,7 +7501,7 @@ class SubtopicRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 11, 8, 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: kCard,
           borderRadius: BorderRadius.circular(11),
           border: Border.all(color: sub.avoided ? kHint : kLine),
         ),
@@ -7447,7 +7772,7 @@ class TutorNoteCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 13, 10, 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: kCard,
           borderRadius: BorderRadius.circular(11),
           border: Border(left: BorderSide(color: kAccent, width: 3)),
           boxShadow: kCardShadow,
@@ -8868,12 +9193,12 @@ class PrimaryButton extends StatelessWidget {
           ),
         ),
         child: busy
-            ? const SizedBox(
+            ? SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.2,
-                  color: Colors.white,
+                  color: kOnAccent,
                 ),
               )
             : Text(
@@ -9688,8 +10013,12 @@ class ResumeCard extends StatelessWidget {
             child: FilledButton(
               onPressed: onContinue,
               style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: kAccent,
+                // On the accent-filled card, so this is the inverse pair:
+                // the page's "on accent" colour as the fill, and the filled
+                // surface's own colour as the label. kAccent here would be
+                // the light teal in the dark theme, on white, at 2.4:1.
+                backgroundColor: kOnAccent,
+                foregroundColor: kAccentSurface,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(11),
@@ -9996,7 +10325,7 @@ class LevelCard extends StatelessWidget {
     final filled = _rungs[info.level] ?? 1;
 
     return Material(
-      color: Colors.white,
+      color: kCard,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -10976,7 +11305,6 @@ class LessonMarkdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final blocks = _parseLesson(body);
     final para = TextStyle(fontSize: 15, height: 1.62, color: kInk);
 
@@ -11086,7 +11414,7 @@ class LessonMarkdown extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 14),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: dark ? const Color(0xFF1C2320) : const Color(0xFFF1F0EB),
+              color: kTrack,
               borderRadius: BorderRadius.circular(9),
               border: Border.all(color: kLine),
             ),
@@ -11493,7 +11821,7 @@ class LessonTile extends StatelessWidget {
                         ? Icons.check_circle_rounded
                         : Icons.circle_outlined,
                     size: 20,
-                    color: lesson.isRead ? kAccent : const Color(0xFFC9CCC7),
+                    color: lesson.isRead ? kAccent : kLine,
                   ),
                 ),
                 Expanded(
@@ -12910,14 +13238,14 @@ class _ReviewRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
               decoration: BoxDecoration(
-                color: const Color(0xFFFDF6EC),
+                color: kWarmTint,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFF0E2CC)),
+                border: Border.all(color: kHint.withValues(alpha: 0.35)),
               ),
               child: Text(
                 row.feedback!,
-                style: const TextStyle(
-                    fontSize: 12.5, height: 1.5, color: Color(0xFF7A5518)),
+                style: TextStyle(
+                    fontSize: 12.5, height: 1.5, color: kHint),
               ),
             ),
           ],
@@ -13127,8 +13455,8 @@ class _OptionTileState extends State<OptionTile> {
       tokenBg = kAccent;
       tokenFg = Colors.white;
     } else if (widget.isRuledOut) {
-      border = kWrongWash;
-      background = const Color(0xFFFBF6F5);
+      border = kWrong.withValues(alpha: 0.30);
+      background = kWrongWash;
       textColor = kInkSoft.withValues(alpha: 0.75);
       tokenBg = Colors.transparent;
       tokenFg = kInkSoft.withValues(alpha: 0.6);
@@ -13557,7 +13885,7 @@ class ErrorView extends StatelessWidget {
         Container(
           padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
           decoration: BoxDecoration(
-            color: const Color(0xFFFCF1EF),
+            color: kWrongWash,
             borderRadius: BorderRadius.circular(14),
             border: Border(left: BorderSide(color: kWrong, width: 4)),
           ),
@@ -13696,18 +14024,16 @@ Band bandForRate(int? rate) {
   return Band.orange;
 }
 
-/// Colour for a band. Deliberately not red-for-bad-only: amber and red mean
-/// "spend time here", which is useful information, not a telling-off.
+/// Colour for a band, in the theme currently in force.
+///
 /// The traffic-signal palette, exactly as the mindmap design specifies it.
 /// Deliberately not red-for-bad-only: orange and yellow mean "spend time
 /// here", which is useful information, not a telling-off.
-Color bandColour(Band b) => switch (b) {
-      Band.green => const Color(0xFF2E7D32),
-      Band.lightGreen => const Color(0xFF66BB6A),
-      Band.yellow => const Color(0xFFD9A404),
-      Band.orange => const Color(0xFFE8590C),
-      Band.grey => const Color(0xFF9AA0A6),
-    };
+///
+/// This used to be a switch over five compile-time constants, and that was
+/// the single worst thing about the dark theme: dots, bars and branches all
+/// kept their daylight values against a near-black page.
+Color bandColour(Band b) => kPalette.bandFill[b.index];
 
 String bandWord(Band b) => switch (b) {
       Band.green => 'Mastered',
@@ -13717,17 +14043,15 @@ String bandWord(Band b) => switch (b) {
       Band.grey => 'Not started',
     };
 
-/// Darkened variants for TEXT in a band colour. The fill palette above is
-/// tuned for dots, bars and branches; as 11px text on white, yellow and
-/// light green measure ~2.3:1 — well under the 4.5:1 readable floor. Fills
-/// stay bright, words use these.
-Color bandTextColour(Band b) => switch (b) {
-      Band.green => const Color(0xFF2E7D32),
-      Band.lightGreen => const Color(0xFF33753B),
-      Band.yellow => const Color(0xFF8A6803),
-      Band.orange => const Color(0xFFBC4708),
-      Band.grey => const Color(0xFF5F6368),
-    };
+/// The variant for TEXT in a band colour. The fill palette above is tuned
+/// for dots, bars and branches; as 11px text, yellow and light green
+/// measure about 2.3:1 on white — well under the 4.5:1 readable floor.
+/// Fills stay bright, words use these.
+///
+/// In the light theme these are DARKENED and in the dark theme they are
+/// LIGHTENED, which is why this cannot be one set. Shipping the light set
+/// into the dark put all five words between 2.55:1 and 3.01:1.
+Color bandTextColour(Band b) => kPalette.bandText[b.index];
 
 class LevelStat {
   final String level;
@@ -14009,7 +14333,7 @@ class JokeStrip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 15),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F1EA),
+        color: kTrack,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -14184,8 +14508,10 @@ class ReportView extends StatelessWidget {
                     Container(
                       width: 6,
                       height: 6,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFC2603F),
+                      // The same orange the bands use for "needs work",
+                      // because that is exactly what this bullet means.
+                      decoration: BoxDecoration(
+                        color: bandColour(Band.orange),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -14649,7 +14975,7 @@ class _UnitTreeRow extends StatelessWidget {
         ),
         if (expanded)
           Container(
-            color: const Color(0xFFFAF9F6),
+            color: kSurface,
             child: Column(
               children: [
                 for (final s in unit.subtopics)
@@ -14747,7 +15073,9 @@ class _MasteryPercent extends StatelessWidget {
         style: TextStyle(
           fontSize: big ? 14 : 12.5,
           fontWeight: FontWeight.w800,
-          color: pct == null ? const Color(0xFFB6BCB8) : bandTextColour(band),
+          color: pct == null
+              ? bandTextColour(Band.grey)
+              : bandTextColour(band),
         ),
       ),
     );
@@ -15018,7 +15346,7 @@ class _MindMapState extends State<_MindMap> {
           constraints: const BoxConstraints(maxWidth: 190),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: kCard,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: colour, width: 2),
             boxShadow: kCardShadow,
@@ -15392,7 +15720,7 @@ class _MyReportScreenState extends State<MyReportScreen> {
         Container(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           decoration: BoxDecoration(
-            color: const Color(0xFFF3F1EA),
+            color: kTrack,
             borderRadius: BorderRadius.circular(10),
           ),
           child: SelectableText(
