@@ -85,9 +85,14 @@ other e-transfer recipient.
 
 ### Automatically
 
-We keep a short-lived count of failed sign-in attempts and heavy API use, so
-that the service cannot be brute-forced. It contains no personal information
-beyond an account reference.
+Nothing beyond what is listed above. There is no analytics, no tracking
+pixel, no advertising identifier and no third-party script of any kind on
+any page of this app.
+
+Supabase, our database and sign-in provider, keeps its own short-lived
+service logs of requests made to it, in the same Canadian region as the
+data. We do not add to them and we do not use them for anything but
+diagnosing a fault.
 
 ## 3. What we do NOT collect
 

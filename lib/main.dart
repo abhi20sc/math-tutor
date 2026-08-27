@@ -53,6 +53,8 @@
 
 // Trigonometry, for the mindmap's leaf fan.
 import 'dart:math' as math;
+// PlatformDispatcher, for the uncaught-error handler in main().
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 // Clipboard, for copying the share link.
@@ -2646,9 +2648,48 @@ class ClassRepository {
 // 4. APP SHELL
 // ==========================================================================
 
+/// Where an uncaught error goes.
+///
+/// Before this, nowhere. A crash inside a build or a failed Future in a
+/// button handler printed to a console nobody has open and the student saw
+/// a frozen screen, which is the worst of both: they cannot report it
+/// usefully and we never hear about it.
+///
+/// This is not an error reporting service and does not pretend to be one.
+/// It is the seam where one goes — the single place to add a Sentry DSN or
+/// a POST to an edge function later, rather than hunting through the app
+/// for every place something can throw. Until then it at least makes a
+/// crash legible in a browser console a tutor can be walked through
+/// opening.
+///
+/// What it must never do is include what the student was answering. An
+/// error report is not a place for question text.
+void _reportError(Object error, StackTrace? stack, {String? context}) {
+  final where = context == null ? '' : ' [$context]';
+  // debugPrint rather than print: it throttles, so an error that fires on
+  // every frame cannot lock the tab up on its own log output.
+  debugPrint('AstroError$where: $error');
+  if (stack != null) debugPrint(stack.toString());
+}
+
 Future<void> main() async {
   // Required because Supabase.initialize is async and runs before runApp.
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Anything Flutter catches during build, layout or paint.
+  final previousOnError = FlutterError.onError;
+  FlutterError.onError = (details) {
+    _reportError(details.exception, details.stack, context: 'flutter');
+    previousOnError?.call(details);
+  };
+
+  // Anything that escapes a Future and would otherwise vanish. Returning
+  // true says it has been handled, which stops it also reaching the
+  // platform's own handler and being reported twice.
+  PlatformDispatcher.instance.onError = (error, stack) {
+    _reportError(error, stack, context: 'uncaught');
+    return true;
+  };
 
   // publishableKey rather than the deprecated anonKey — the key below is
   // already a publishable one, so this is a rename, not a change of secret.
@@ -3200,6 +3241,13 @@ class _AuthScreenState extends State<AuthScreen> {
                           : 'New here? Create an account',
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  // The policy has to be reachable from the screen where
+                  // the account is created, not only from a footer on a
+                  // site the student never visits. These users are
+                  // children; a privacy policy nobody can find is a
+                  // privacy policy nobody has read.
+                  const LegalLinks(),
                 ],
               ),
             ),
@@ -12858,6 +12906,45 @@ class TestScore {
 /// The option they chose, whether it was right, and — only when it was not —
 /// the feedback line naming the mistake. Never the correct answer: these
 /// questions come round again, and printing it would spend one of them.
+/// Privacy and terms, as they appear on the sign-in screen and in the
+/// profile pane.
+///
+/// They open in a new tab rather than inside the app because they are
+/// rendered HTML — tools/render_legal.py turns docs/PRIVACY.md and
+/// docs/TERMS.md into web/privacy.html and web/terms.html, so there is one
+/// copy of each and it is the one under version control.
+class LegalLinks extends StatelessWidget {
+  const LegalLinks({super.key});
+
+  Future<void> _open(String page) async {
+    // Relative to wherever the app is served, so this works on the
+    // Netlify site and on a local build without knowing either URL.
+    final uri = Uri.base.resolve(page);
+    await launchUrl(uri, webOnlyWindowName: '_blank');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(fontSize: 12, color: kInkSoft);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        TextButton(
+          onPressed: () => _open('privacy.html'),
+          style: TextButton.styleFrom(foregroundColor: kInkSoft),
+          child: Text('Privacy', style: style),
+        ),
+        Text('\u00b7', style: style),
+        TextButton(
+          onPressed: () => _open('terms.html'),
+          style: TextButton.styleFrom(foregroundColor: kInkSoft),
+          child: Text('Terms', style: style),
+        ),
+      ],
+    );
+  }
+}
+
 /// One option of a finished paper's question: the text, and the mistake
 /// that lands on it.
 ///

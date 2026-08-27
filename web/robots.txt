@@ -1,0 +1,8 @@
+# The app is not launched yet, and there is nothing here worth indexing when
+# it is: every page behind the front door needs an account. Replace this with
+# a real allow list on the day there is a public marketing page.
+#
+# This is deliberately not a sitemap. A sitemap listing URLs that all resolve
+# to the same single-page shell is worse than none.
+User-agent: *
+Disallow: /

@@ -1,0 +1,8 @@
+# A single-page app: every path has to reach index.html and let the app route
+# it, or a reloaded page and every shared link 404s. The share link
+# (/#/r/<token>) is the one that matters most — a parent following it is the
+# least likely person to work out that the URL was fine and the host was not.
+#
+# 200 rather than 301: rewrite, do not redirect, so the address bar keeps the
+# path the app is about to read.
+/*    /index.html   200

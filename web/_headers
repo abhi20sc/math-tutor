@@ -1,0 +1,43 @@
+# Netlify reads this from the root of the deployed folder. `flutter build web`
+# copies everything in web/ into build/web, which is the folder that gets
+# dragged onto Netlify, so this file has to live here rather than at the repo
+# root — a netlify.toml at the root is never seen by a drag-and-drop deploy.
+
+/*
+  # A year, with preload. Only safe because there is no http-only subdomain
+  # of this host and nothing here is served over plain http.
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  # Stops a browser second-guessing a Content-Type. The figures are served as
+  # image/png and must never be sniffed as anything else.
+  X-Content-Type-Options: nosniff
+  # Send the origin to other sites, the full path only to ourselves. A share
+  # link carries a token in its URL, and that token must not travel in a
+  # Referer header to whatever a student clicks next.
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Nothing here needs any of these, and a Flutter canvas will not ask.
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  # frame-ancestors rather than X-Frame-Options: the modern one, and the only
+  # one that takes a list. Nobody embeds this app in a frame, including us.
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+
+# The Flutter bootstrap decides which build to load, so it must never be held
+# in a cache. This is the file that makes "I deployed but I still see the old
+# app" happen.
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+/flutter_bootstrap.js
+  Cache-Control: public, max-age=0, must-revalidate
+/flutter_service_worker.js
+  Cache-Control: public, max-age=0, must-revalidate
+/manifest.json
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Figures are content-addressed by name and are regenerated under new names
+# when they change, so they can be cached hard.
+/figures/*
+  Cache-Control: public, max-age=31536000, immutable
+/icons/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
