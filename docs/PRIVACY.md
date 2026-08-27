@@ -108,6 +108,9 @@ We think the absences matter as much as the list above:
   asks for is a profile photo you choose yourself.
 - **No cookies except the one that keeps you signed in.** There is no consent
   banner on this site because there is nothing to consent to.
+- **No analytics of any kind.** We do not know how many people visit, which
+  pages they open, or where they came from. That is a deliberate choice for
+  a product used by children, and it is why there is nothing to opt out of.
 - **No selling, renting, or sharing of your information with anyone**, for any
   purpose, ever.
 
@@ -117,6 +120,7 @@ We think the absences matter as much as the list above:
 |---|---|---|
 | Supabase (Amazon `ca-central-1`) | The database and your profile photo | **Canada** |
 | Netlify | The app's own files — HTML, images, code | Served worldwide; **contains no personal data** |
+| Google Fonts (fonts.gstatic.com) | Nothing we send. Your browser fetches two font files from Google to draw text, and Google sees that request — your IP address and which font | Worldwide. We do not choose this: it is how the framework the app is built on renders text, and we have removed every other Google request we could |
 | Stripe | Payment records | Ireland and the United States |
 | Our email provider | The single message sent to a parent about payment | Canada or the United States |
 

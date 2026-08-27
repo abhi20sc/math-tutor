@@ -188,6 +188,9 @@ diagnosing a fault.</p>
   asks for is a profile photo you choose yourself.</li>
 <li><strong>No cookies except the one that keeps you signed in.</strong> There is no consent
   banner on this site because there is nothing to consent to.</li>
+<li><strong>No analytics of any kind.</strong> We do not know how many people visit, which
+  pages they open, or where they came from. That is a deliberate choice for
+  a product used by children, and it is why there is nothing to opt out of.</li>
 <li><strong>No selling, renting, or sharing of your information with anyone</strong>, for any
   purpose, ever.</li>
 </ul>
@@ -210,6 +213,11 @@ diagnosing a fault.</p>
 <td>Netlify</td>
 <td>The app's own files — HTML, images, code</td>
 <td>Served worldwide; <strong>contains no personal data</strong></td>
+</tr>
+<tr>
+<td>Google Fonts (fonts.gstatic.com)</td>
+<td>Nothing we send. Your browser fetches two font files from Google to draw text, and Google sees that request — your IP address and which font</td>
+<td>Worldwide. We do not choose this: it is how the framework the app is built on renders text, and we have removed every other Google request we could</td>
 </tr>
 <tr>
 <td>Stripe</td>

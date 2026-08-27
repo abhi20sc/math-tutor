@@ -120,10 +120,29 @@ them and why they are the ones most often forgotten.
 ```bash
 flutter pub get
 flutter analyze          # expect zero issues
-flutter test             # expect 39 passing
-flutter build web --release
+flutter test             # expect 44 passing
+flutter build web --release --no-web-resources-cdn
 # then drag build/web onto Netlify
 ```
+
+**`--no-web-resources-cdn` is not optional, and it is not about speed.**
+Without it the browser fetches Flutter's rendering engine — 2.1 MB — from
+`gstatic.com`, which means every student's browser contacts Google on every
+cold load. With it, the engine is served from your own Netlify origin,
+where the `_headers` file already caches it for a year.
+
+Measured, both ways, on a cold load: the bytes are the same. What changes
+is who sees the request. For an app used by children that is worth the
+flag.
+
+It does not remove Google entirely — `fonts.gstatic.com` is still contacted
+for two fallback font files that the framework loads to draw text, and
+there is no supported way to stop that short of bundling fonts. Google is
+named in the privacy policy for exactly that reason.
+
+**You need about 2 GB free to build.** The disk was at 316 MB when this was
+last checked and the build failed outright. `flutter clean` and emptying
+`~/Library/Developer/Xcode/DerivedData` are the usual two.
 
 - [ ] Confirm `build/web` contains `_headers` and `_redirects`. They live in
       `web/` and are copied by the build. Without `_redirects` every shared
@@ -158,6 +177,10 @@ The things that have never been tested end to end on hardware.
 - [ ] A share link in a private window
 - [ ] One full question with a figure — Trigonometry Medium has them
 - [ ] The mindmap: expand a unit, drag a branch, then Reset view
+- [ ] The Astro+ form, and the link it gives you, opened in a private window
+- [ ] Every dialog, on the phone. Five of them are covered by widget tests
+      at 375x812; the ones that hold a repository cannot be tested that way
+      and have never been seen on a phone
 - [ ] Profile → Download my data, and read what comes out
 - [ ] Profile → Delete my account, on a throwaway account. Confirm the rows
       are gone rather than flagged
