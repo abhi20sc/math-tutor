@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Astro Math Assist**
+**Astro STEM Labs**
 
 *Last updated: 23 August 2026*
 
@@ -8,7 +8,7 @@
 
 ## In short
 
-Astro Math Assist is a maths practice app for Ontario high-school students. To
+Astro STEM Labs is a maths practice app for Ontario high-school students. To
 work, it has to remember who you are and which questions you have answered.
 That is essentially all it keeps.
 
@@ -27,7 +27,7 @@ The rest of this page is the detail behind those five sentences.
 
 ## 1. Who we are
 
-Astro Math Assist is operated by STEM Labs, a private mathematics tutoring
+Astro STEM Labs is operated by STEM Labs, a private mathematics tutoring
 practice based in Ontario, Canada.
 
 For any question about your information, or to ask for a copy or a deletion,
@@ -47,6 +47,8 @@ because a feature would not work without it.
 | Password | Stored only as a cryptographic hash. Nobody at STEM Labs can read it |
 | Your name | So your tutor sees a name rather than an email address |
 | Course and grade | To decide which question bank you see |
+| Your date of birth | To check you are old enough, and to know whether we need to ask a parent or guardian first. Set once, at signup |
+| A parent or guardian's email address, if you are under 18 | So we can send them the link that asks whether they are happy for us to keep a record of your work. Used for nothing else |
 
 ### While you use the app
 
@@ -155,21 +157,30 @@ the lock if you lose track of it.
 
 ## 7. Students under 18
 
-Astro Math Assist is built for students in Grades 9 to 12, most of whom are
+Astro STEM Labs is built for students in Grades 9 to 12, most of whom are
 between 14 and 18 years old.
 
-- **If you are under 13**, a parent or guardian must set up and consent to your
-  account. Please ask them to email us before signing up.
-- **If you are 13 or older**, you can consent for yourself, but we strongly
-  encourage you to tell a parent or guardian that you are using the app —
-  particularly before you fill in the Astro+ form, which asks for their
-  details.
-- **A parent or guardian can ask us at any time** for a copy of their child's
-  information, or for it to be deleted. We will verify who they are before
-  acting.
+- **Under 13, you cannot sign up.** The app refuses the account. This is
+  checked on our servers and not only in the form, so it is not something
+  that can be worked around.
+- **Between 13 and 17, a parent or guardian has to say yes before we keep
+  any record of your work.** You can read every lesson and try every question
+  while you wait — but nothing you do is saved, no score is kept, and your
+  tutor sees nothing, until they confirm. This is enforced by the database
+  itself: until consent is recorded, a row about you cannot be written.
+- **They say yes by opening a link.** You give us their email address, we
+  give you the link, and they open it. Nothing else is asked of them, and
+  they do not need an account.
+- **They can change their mind at any time** by opening the same link again.
+  From that moment nothing new is recorded. Work already saved is not deleted
+  by withdrawing consent — email us if you want that too.
+- **At 18 and over, you consent for yourself.**
 
-We do not knowingly collect information from children under 13 who have signed
-up without a parent. If we discover we have, we delete it.
+We hold the date and time consent was given, and the address it was given
+from, because a consent nobody can produce a record of is not one.
+
+We do not knowingly hold information about anyone under 13. If we discover we
+have, we delete it.
 
 ## 8. How long we keep things
 
@@ -179,11 +190,18 @@ up without a parent. If we discover we have, we delete it.
 | Practice history after you press "Reset my progress" | The old rows stay but are excluded from every score and report. Ask us if you want them removed outright |
 | Enrolment forms with a parent's contact details | 12 months, then deleted |
 | Payment records | 7 years, because Canadian tax law requires it |
-| Rate-limit counters | 30 days |
+| Rate-limit counters | Counted in fifteen-minute windows and cleared on a rolling basis. They hold a one-way hash of the email address involved, never the address itself |
+| The record that a guardian consented, and when | As long as the account exists — it is the evidence that we were allowed to keep anything at all |
 
-**When you close your account, we delete your profile, your practice history,
-your photo and your notes.** What survives is the payment record, and only
-because we are legally required to keep it.
+**You can close your account yourself**, from Profile in the app. It asks you
+to type the word DELETE, and then it deletes your profile, every question you
+have answered, your medals, your test papers, your photo and your tutor's
+notes about you. It is immediate and there is no copy — it is not a flag on a
+row that we could undo later. What survives is the payment record, and only
+because Canadian tax law requires it.
+
+**You can also download everything we hold about you**, from the same place,
+as one file. You do not have to ask us and there is nothing to wait for.
 
 ## 9. Your rights
 

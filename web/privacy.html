@@ -57,11 +57,11 @@ footer a{margin-right:18px}
 <div class="wrap">
   <a class="brand" href="/"><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M 9 15 Q 50 155 91 15" fill="none" stroke="var(--teal)" stroke-width="9.8" stroke-linecap="round"/><polygon points="50.00,41.80 52.64,50.43 61.43,48.40 55.28,55.00 61.43,61.60 52.64,59.57 50.00,68.20 47.36,59.57 38.57,61.60 44.72,55.00 38.57,48.40 47.36,50.43" fill="var(--gold)"/></svg><span>Astro Math Assist</span></a>
   <h1>Privacy Policy</h1>
-  <p><strong>Astro Math Assist</strong></p>
+  <p><strong>Astro STEM Labs</strong></p>
 <p><em>Last updated: 23 August 2026</em></p>
 <hr />
 <h2>In short</h2>
-<p>Astro Math Assist is a maths practice app for Ontario high-school students. To
+<p>Astro STEM Labs is a maths practice app for Ontario high-school students. To
 work, it has to remember who you are and which questions you have answered.
 That is essentially all it keeps.</p>
 <ul>
@@ -77,7 +77,7 @@ That is essentially all it keeps.</p>
 <p>The rest of this page is the detail behind those five sentences.</p>
 <hr />
 <h2>1. Who we are</h2>
-<p>Astro Math Assist is operated by STEM Labs, a private mathematics tutoring
+<p>Astro STEM Labs is operated by STEM Labs, a private mathematics tutoring
 practice based in Ontario, Canada.</p>
 <p>For any question about your information, or to ask for a copy or a deletion,
 write to <strong>stemlabs.ca@gmail.com</strong>. A person reads that inbox, and we aim to
@@ -109,6 +109,14 @@ because a feature would not work without it.</p>
 <tr>
 <td>Course and grade</td>
 <td>To decide which question bank you see</td>
+</tr>
+<tr>
+<td>Your date of birth</td>
+<td>To check you are old enough, and to know whether we need to ask a parent or guardian first. Set once, at signup</td>
+</tr>
+<tr>
+<td>A parent or guardian's email address, if you are under 18</td>
+<td>So we can send them the link that asks whether they are happy for us to keep a record of your work. Used for nothing else</td>
 </tr>
 </tbody>
 </table>
@@ -247,21 +255,29 @@ means:</p>
 <p>Treat a share link like a house key: give it to people you trust, and change
 the lock if you lose track of it.</p>
 <h2>7. Students under 18</h2>
-<p>Astro Math Assist is built for students in Grades 9 to 12, most of whom are
+<p>Astro STEM Labs is built for students in Grades 9 to 12, most of whom are
 between 14 and 18 years old.</p>
 <ul>
-<li><strong>If you are under 13</strong>, a parent or guardian must set up and consent to your
-  account. Please ask them to email us before signing up.</li>
-<li><strong>If you are 13 or older</strong>, you can consent for yourself, but we strongly
-  encourage you to tell a parent or guardian that you are using the app —
-  particularly before you fill in the Astro+ form, which asks for their
-  details.</li>
-<li><strong>A parent or guardian can ask us at any time</strong> for a copy of their child's
-  information, or for it to be deleted. We will verify who they are before
-  acting.</li>
+<li><strong>Under 13, you cannot sign up.</strong> The app refuses the account. This is
+  checked on our servers and not only in the form, so it is not something
+  that can be worked around.</li>
+<li><strong>Between 13 and 17, a parent or guardian has to say yes before we keep
+  any record of your work.</strong> You can read every lesson and try every question
+  while you wait — but nothing you do is saved, no score is kept, and your
+  tutor sees nothing, until they confirm. This is enforced by the database
+  itself: until consent is recorded, a row about you cannot be written.</li>
+<li><strong>They say yes by opening a link.</strong> You give us their email address, we
+  give you the link, and they open it. Nothing else is asked of them, and
+  they do not need an account.</li>
+<li><strong>They can change their mind at any time</strong> by opening the same link again.
+  From that moment nothing new is recorded. Work already saved is not deleted
+  by withdrawing consent — email us if you want that too.</li>
+<li><strong>At 18 and over, you consent for yourself.</strong></li>
 </ul>
-<p>We do not knowingly collect information from children under 13 who have signed
-up without a parent. If we discover we have, we delete it.</p>
+<p>We hold the date and time consent was given, and the address it was given
+from, because a consent nobody can produce a record of is not one.</p>
+<p>We do not knowingly hold information about anyone under 13. If we discover we
+have, we delete it.</p>
 <h2>8. How long we keep things</h2>
 <table>
 <thead>
@@ -289,13 +305,22 @@ up without a parent. If we discover we have, we delete it.</p>
 </tr>
 <tr>
 <td>Rate-limit counters</td>
-<td>30 days</td>
+<td>Counted in fifteen-minute windows and cleared on a rolling basis. They hold a one-way hash of the email address involved, never the address itself</td>
+</tr>
+<tr>
+<td>The record that a guardian consented, and when</td>
+<td>As long as the account exists — it is the evidence that we were allowed to keep anything at all</td>
 </tr>
 </tbody>
 </table>
-<p><strong>When you close your account, we delete your profile, your practice history,
-your photo and your notes.</strong> What survives is the payment record, and only
-because we are legally required to keep it.</p>
+<p><strong>You can close your account yourself</strong>, from Profile in the app. It asks you
+to type the word DELETE, and then it deletes your profile, every question you
+have answered, your medals, your test papers, your photo and your tutor's
+notes about you. It is immediate and there is no copy — it is not a flag on a
+row that we could undo later. What survives is the payment record, and only
+because Canadian tax law requires it.</p>
+<p><strong>You can also download everything we hold about you</strong>, from the same place,
+as one file. You do not have to ask us and there is nothing to wait for.</p>
 <h2>9. Your rights</h2>
 <p>Under Canada's <em>Personal Information Protection and Electronic Documents Act</em>
 (PIPEDA) you have the right to:</p>

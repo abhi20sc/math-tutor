@@ -51,6 +51,8 @@
 //   No password reset flow yet. Supabase supports it through
 //   auth.resetPasswordForEmail; it needs a screen building.
 
+// JsonEncoder, for the data export.
+import 'dart:convert';
 // Trigonometry, for the mindmap's leaf fan.
 import 'dart:math' as math;
 // PlatformDispatcher, for the uncaught-error handler in main().
@@ -1517,6 +1519,17 @@ class Profile {
 SupabaseClient get _db => Supabase.instance.client;
 
 /// What happened when someone tried to register.
+/// What signup says, whether or not the address already had an account.
+///
+/// One string, used for both outcomes, because the moment they differ the
+/// form becomes a way to test whether somebody has an Astro account. It has
+/// to be true of both cases at once, which is why it says "if" rather than
+/// promising an email.
+const String _sameEitherWayNotice =
+    'Check your email. If this address is new, there is a confirmation link '
+    'waiting; if it already has an account, you can sign in with it — use '
+    'Forgot password if you need to.';
+
 enum RegisterOutcome {
   /// Signed in straight away (email confirmation is off).
   signedIn,
@@ -1526,6 +1539,527 @@ enum RegisterOutcome {
 
   /// The email already has an account — they should sign in instead.
   alreadyExists,
+}
+
+// ---------------------------------------------------------------------------
+// Age
+// ---------------------------------------------------------------------------
+//
+// These two mirror minimum_age() and guardian_required_below() in
+// supabase/migrations/student_safeguarding.sql. The SERVER is the rule; these
+// exist so a student is told before an account is created rather than after.
+// If one moves, move the other — there is no way to derive one from the
+// other and a mismatch shows up as a form that accepts what the server then
+// refuses.
+
+/// Below this, no account. Not a legal constant: it is the line below which
+/// guidance agrees a child cannot consent for themselves, and the courses
+/// here start at Grade 9 anyway.
+const int kMinimumAge = 13;
+
+/// Below this, a parent or guardian has to say yes first.
+const int kGuardianRequiredBelow = 18;
+
+/// Whole years, the way a birthday works rather than the way a subtraction
+/// of days does.
+int _wholeYearsSince(DateTime dob) {
+  final now = DateTime.now();
+  var years = now.year - dob.year;
+  final hadBirthday = now.month > dob.month ||
+      (now.month == dob.month && now.day >= dob.day);
+  if (!hadBirthday) years -= 1;
+  return years;
+}
+
+/// The date-of-birth picker on the signup form.
+class _DateOfBirthField extends StatelessWidget {
+  final DateTime? value;
+  final ValueChanged<DateTime> onChanged;
+
+  const _DateOfBirthField({required this.value, required this.onChanged});
+
+  Future<void> _pick(BuildContext context) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      // Opens on a plausible birthday for this app's students rather than
+      // on today, which would be fourteen taps away from any real answer.
+      initialDate: value ?? DateTime(now.year - 15, now.month, now.day),
+      firstDate: DateTime(now.year - 100),
+      lastDate: now,
+      helpText: 'Your date of birth',
+      initialDatePickerMode: DatePickerMode.year,
+    );
+    if (picked != null) onChanged(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final years = value == null ? null : _wholeYearsSince(value!);
+    final tooYoung = years != null && years < kMinimumAge;
+    final needsGuardian =
+        years != null && years >= kMinimumAge && years < kGuardianRequiredBelow;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InputDecorator(
+          decoration: InputDecoration(
+            labelText: 'Date of birth',
+            border: const OutlineInputBorder(),
+            errorText: tooYoung
+                ? 'You need to be at least $kMinimumAge'
+                : null,
+            helperText: needsGuardian
+                ? 'We will ask a parent or guardian to confirm your account'
+                : 'So we know whether to ask a parent or guardian',
+          ),
+          child: InkWell(
+            onTap: () => _pick(context),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      value == null
+                          ? 'Tap to choose'
+                          : '${value!.day} ${_shortMonth(value!.month)} '
+                              '${value!.year}',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: value == null ? kInkSoft : kInk,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.calendar_today_rounded, size: 17, color: kInkSoft),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The screen a student under 18 sees until a guardian confirms.
+///
+/// It does NOT lock them out. Reading is allowed and always was — the rule
+/// is that nothing about them is RECORDED, and that rule lives on the
+/// attempts and lesson_reads tables rather than here. This screen exists so
+/// a student understands why their work is not being saved, instead of
+/// meeting a database error mid-question.
+class GuardianConsentScreen extends StatefulWidget {
+  final ConsentStatus status;
+  final VoidCallback onRecheck;
+
+  /// Carry on without consent. The app still works; nothing is saved.
+  final VoidCallback onContinueAnyway;
+
+  const GuardianConsentScreen({
+    super.key,
+    required this.status,
+    required this.onRecheck,
+    required this.onContinueAnyway,
+  });
+
+  @override
+  State<GuardianConsentScreen> createState() => _GuardianConsentScreenState();
+}
+
+class _GuardianConsentScreenState extends State<GuardianConsentScreen> {
+  final _safeguarding = SafeguardingRepository();
+  final _emailController = TextEditingController();
+  bool _busy = false;
+  String? _error;
+  String? _link;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.text = widget.status.guardianEmail ?? '';
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final email = _emailController.text.trim();
+    if (email.length < 3 || !email.contains('@')) {
+      setState(() => _error = 'Enter your parent or guardian\'s email.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final token = await _safeguarding.requestGuardianConsent(email);
+      if (!mounted) return;
+      setState(() {
+        // The app cannot send mail — there is no email function in this
+        // project yet. So it hands the student the link to pass on, which
+        // is honest about what it can do rather than showing a "sent!"
+        // that is not true.
+        _link = Uri.base.resolve('?consent=$token').toString();
+        _busy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not do that: $e';
+        _busy = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 32),
+                  const Center(child: BrandBadge(size: 56)),
+                  const SizedBox(height: 20),
+                  Text(
+                    'One thing first',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: kSerif,
+                      fontFamilyFallback: kSerifFallback,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w600,
+                      color: kInk,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'You are under $kGuardianRequiredBelow, so we need a '
+                    'parent or guardian to say it is alright for us to keep '
+                    'a record of your work. Until they do you can read '
+                    'everything and try any question — none of it is saved.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14.5, height: 1.55, color: kInkSoft),
+                  ),
+                  const SizedBox(height: 26),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Parent or guardian email',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 14),
+                    _Banner(message: _error!, colour: kWrong),
+                  ],
+                  const SizedBox(height: 16),
+                  PrimaryButton(
+                    label: _link == null ? 'Make their link' : 'Make a new link',
+                    busy: _busy,
+                    onPressed: _busy ? null : _send,
+                  ),
+                  if (_link != null) ...[
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+                      decoration: BoxDecoration(
+                        color: kTrack,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Send this to them. Opening it is all they have '
+                            'to do. Making a new link stops this one working.',
+                            style: TextStyle(
+                                fontSize: 12.5, height: 1.5, color: kInkSoft),
+                          ),
+                          const SizedBox(height: 8),
+                          SelectableText(
+                            _link!,
+                            style: TextStyle(
+                                fontSize: 12, height: 1.4, color: kInk),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: () => Clipboard.setData(
+                                ClipboardData(text: _link!)),
+                            icon: const Icon(Icons.copy_rounded, size: 17),
+                            label: const Text('Copy the link'),
+                            style: TextButton.styleFrom(
+                                foregroundColor: kAccentDeep),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 22),
+                  TextButton(
+                    onPressed: widget.onRecheck,
+                    child: const Text('They have done it — check again'),
+                  ),
+                  TextButton(
+                    onPressed: widget.onContinueAnyway,
+                    style: TextButton.styleFrom(foregroundColor: kInkSoft),
+                    child: const Text(
+                        'Look around without saving anything for now'),
+                  ),
+                  const SizedBox(height: 12),
+                  const LegalLinks(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What a parent or guardian sees when they follow the link.
+///
+/// Reachable WITHOUT an account, because a parent should not have to make
+/// one to say yes. The token in the URL is the authentication, exactly as
+/// it is for a shared report.
+class GuardianConsentLandingScreen extends StatefulWidget {
+  final String token;
+
+  const GuardianConsentLandingScreen({super.key, required this.token});
+
+  @override
+  State<GuardianConsentLandingScreen> createState() =>
+      _GuardianConsentLandingScreenState();
+}
+
+class _GuardianConsentLandingScreenState
+    extends State<GuardianConsentLandingScreen> {
+  final SupabaseClient _db = Supabase.instance.client;
+  bool _loading = true;
+  String? _error;
+  String? _name;
+  bool _already = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _confirm();
+  }
+
+  Future<void> _confirm() async {
+    try {
+      final rows = await _db.rpc('guardian_consent_by_token',
+          params: {'p_token': widget.token}) as List;
+      if (!mounted) return;
+      final row = Map<String, dynamic>.from(rows.first);
+      setState(() {
+        _name = row['student_name'] as String?;
+        _already = row['already'] == true;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        // Deliberately vague. An unknown token must not be distinguishable
+        // from an expired or replaced one, or the page becomes a way to
+        // test tokens.
+        _error = 'This link is not valid any more. Ask for a new one.';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _withdraw() async {
+    try {
+      await _db.rpc('withdraw_guardian_consent',
+          params: {'p_token': widget.token});
+      if (!mounted) return;
+      setState(() {
+        _name = null;
+        _error = 'Consent withdrawn. Nothing new will be recorded. '
+            'Work already saved is not deleted — ask us if you want it gone.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Could not do that. Try the link again.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: _loading
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 90),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 32),
+                        const Center(child: BrandBadge(size: 56)),
+                        const SizedBox(height: 20),
+                        Text(
+                          _error != null
+                              ? 'Sorry'
+                              : (_already ? 'Already done' : 'Thank you'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: kSerif,
+                            fontFamilyFallback: kSerifFallback,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w600,
+                            color: kInk,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _error ??
+                              (_already
+                                  ? '${_name ?? 'This student'} is already '
+                                      'confirmed. There is nothing else to do.'
+                                  : '${_name ?? 'This student'} can now use '
+                                      'Astro STEM Labs, and we will keep a '
+                                      'record of the questions they answer so '
+                                      'their tutor can see how they are '
+                                      'getting on.'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 14.5, height: 1.6, color: kInkSoft),
+                        ),
+                        const SizedBox(height: 26),
+                        if (_error == null) ...[
+                          Text(
+                            'You can change your mind at any time by opening '
+                            'this same link again.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 12.5, height: 1.5, color: kInkSoft),
+                          ),
+                          const SizedBox(height: 10),
+                          TextButton(
+                            onPressed: _withdraw,
+                            style:
+                                TextButton.styleFrom(foregroundColor: kWrong),
+                            child: const Text('Withdraw consent'),
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        const LegalLinks(),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Where a student's account stands on age and guardian consent.
+class ConsentStatus {
+  final bool needsGuardian;
+  final String? guardianEmail;
+  final DateTime? consentedAt;
+  final DateTime? dateOfBirth;
+  final int? age;
+
+  const ConsentStatus({
+    required this.needsGuardian,
+    this.guardianEmail,
+    this.consentedAt,
+    this.dateOfBirth,
+    this.age,
+  });
+
+  /// The guardian has been named and the link sent, but not followed yet.
+  bool get waitingOnGuardian => needsGuardian && guardianEmail != null;
+
+  factory ConsentStatus.fromJson(Map<String, dynamic> j) => ConsentStatus(
+        needsGuardian: j['needs_guardian'] == true,
+        guardianEmail: j['guardian_email'] as String?,
+        consentedAt: j['consented_at'] == null
+            ? null
+            : DateTime.tryParse(j['consented_at'] as String),
+        dateOfBirth: j['date_of_birth'] == null
+            ? null
+            : DateTime.tryParse(j['date_of_birth'] as String),
+        age: (j['age'] as num?)?.toInt(),
+      );
+
+  /// A database that predates student_safeguarding.sql. Nothing is blocked,
+  /// which matches what the server does — see consent_required.
+  static const unknown = ConsentStatus(needsGuardian: false);
+}
+
+/// Age, guardian consent, export and deletion.
+///
+/// Everything here is enforced server-side as well; this class is the way
+/// in, not the rule. The rules are triggers and grants in
+/// supabase/migrations/student_safeguarding.sql, so a student who edits the
+/// JavaScript gets exactly as far as one who does not.
+class SafeguardingRepository {
+  final SupabaseClient _db = Supabase.instance.client;
+
+  /// Null when the migration has not been applied, so callers can tell
+  /// "nothing to do" apart from "cannot ask".
+  Future<ConsentStatus> status() async {
+    try {
+      final rows = await _db.rpc('my_consent_status') as List;
+      if (rows.isEmpty) return ConsentStatus.unknown;
+      return ConsentStatus.fromJson(Map<String, dynamic>.from(rows.first));
+    } catch (_) {
+      return ConsentStatus.unknown;
+    }
+  }
+
+  /// Set once, at signup. The server refuses a second call, refuses anybody
+  /// under the floor, and refuses a date in the future.
+  Future<void> setDateOfBirth(DateTime dob) async {
+    await _db.rpc('set_my_date_of_birth', params: {
+      // Date only. Sending a timestamp would put a timezone into a birthday
+      // and make somebody a day younger in the wrong hemisphere.
+      'p_dob': dob.toIso8601String().split('T').first,
+    });
+  }
+
+  /// Names the guardian and returns the token for their link.
+  Future<String> requestGuardianConsent(String email) async {
+    final token = await _db.rpc('request_guardian_consent', params: {
+      'p_email': email,
+    });
+    return token as String;
+  }
+
+  /// Everything held about this student, as one document.
+  Future<Map<String, dynamic>> export() async {
+    final data = await _db.rpc('export_my_data');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Irreversible. The caller is responsible for having asked properly.
+  Future<void> deleteAccount() async {
+    await _db.rpc('delete_my_account');
+  }
 }
 
 class AuthRepository {
@@ -1561,14 +2095,30 @@ class AuthRepository {
     required String fullName,
     required int grade,
     required String course,
+    required DateTime? dateOfBirth,
   }) async {
+    // Five per fifteen minutes. Signup also sends mail, and it is the other
+    // endpoint somebody would use to probe for accounts — which the shared
+    // notice already makes pointless, but a limit costs nothing.
+    if (!await _underLimit(_bucketFor('signup', email), limit: 5)) {
+      throw const AuthException(
+        'Too many attempts. Wait a few minutes and try again.',
+        statusCode: rateLimited,
+      );
+    }
     final response = await _db.auth.signUp(
       email: email,
       password: password,
       // The name rides along with the course for the same reason: if email
       // confirmation is on there is no session yet, so writing to profiles
       // would be refused by RLS. All three are copied over on first sign-in.
-      data: {'grade': grade, 'course': course, 'full_name': fullName},
+      data: {
+        'grade': grade,
+        'course': course,
+        'full_name': fullName,
+        // Date only — a timestamp would put a timezone into a birthday.
+        'date_of_birth': dateOfBirth?.toIso8601String().split('T').first,
+      },
     );
 
     // Empty identities on a signup response means the email was already taken.
@@ -1582,10 +2132,57 @@ class AuthRepository {
         : RegisterOutcome.confirmEmail;
   }
 
+  /// Thrown when the server has seen too many of the same action.
+  ///
+  /// A separate type from AuthException on purpose: the sign-in screen has
+  /// to say something different for "wrong password" and "stop trying", and
+  /// catching one to mean the other is how a rate limit ends up telling
+  /// somebody their password is wrong.
+  static const rateLimited = 'RATE_LIMITED';
+
+  /// Asks the server whether this action may proceed, and records the try.
+  ///
+  /// Fails OPEN. If the rate-limit call itself errors — the migration has
+  /// not been run, the network blinked — the action goes ahead. A student
+  /// locked out of their own account because a counter was unreachable is
+  /// a worse outcome than an attacker getting a few extra guesses, and the
+  /// fail-open decision is exactly the sort that has to be deliberate and
+  /// written down rather than arrived at.
+  Future<bool> _underLimit(String bucket, {int limit = 10}) async {
+    try {
+      final ok = await _db.rpc('note_rate_limit', params: {
+        'p_bucket': bucket,
+        'p_limit': limit,
+      });
+      return ok != false;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// The bucket for an email-keyed action.
+  ///
+  /// The address is lowercased and hashed rather than stored: this table is
+  /// a counter, and a counter that accumulates a list of every address
+  /// anybody has tried to sign in as is a list worth stealing. The hash is
+  /// not a security boundary — it is there so the table holds no addresses.
+  String _bucketFor(String action, String email) =>
+      '$action:${email.trim().toLowerCase().hashCode}';
+
   Future<void> signIn({
     required String email,
     required String password,
   }) async {
+    // Ten tries per fifteen minutes against one address. Enough that a
+    // student mistyping a password never notices; far short of what a
+    // guessing attack needs.
+    if (!await _underLimit(_bucketFor('signin', email))) {
+      throw const AuthException(
+        'Too many sign-in attempts for this address. '
+        'Wait a few minutes and try again.',
+        statusCode: rateLimited,
+      );
+    }
     await _db.auth.signInWithPassword(email: email, password: password);
   }
 
@@ -1600,6 +2197,15 @@ class AuthRepository {
   /// caller shows the same "check your email" line either way, so this cannot
   /// be used to probe for accounts.
   Future<void> sendPasswordReset(String email) async {
+    // Tighter than sign-in, because every one of these sends a real email
+    // to somebody who did not ask for it. Three per fifteen minutes.
+    if (!await _underLimit(_bucketFor('reset', email), limit: 3)) {
+      throw const AuthException(
+        'A reset link has already been sent for this address. '
+        'Check your inbox, including spam, before asking for another.',
+        statusCode: rateLimited,
+      );
+    }
     await _db.auth.resetPasswordForEmail(
       email,
       redirectTo: '${Uri.base.origin}/',
@@ -1669,6 +2275,26 @@ class ProfileRepository {
         }, onConflict: 'id')
         .select()
         .single();
+
+    // The birth date rides in the signup metadata for the same reason the
+    // grade does: at signup there may be no session yet, so nothing can be
+    // written to profiles. It is copied over on the first sign-in.
+    //
+    // Through set_my_date_of_birth rather than into the upsert above,
+    // because that function is where the age floor is enforced. Writing the
+    // column directly would put the one rule that matters behind a client
+    // that could simply choose not to call it.
+    final dob = user.userMetadata?['date_of_birth'] as String?;
+    if (dob != null && created['date_of_birth'] == null) {
+      try {
+        await _db.rpc('set_my_date_of_birth', params: {'p_dob': dob});
+      } catch (_) {
+        // Already set, refused, or the migration is not applied. None of
+        // those should stop a student reaching their course — the consent
+        // trigger is what actually holds the line, and it holds it in the
+        // database rather than here.
+      }
+    }
 
     return Profile.fromJson(created);
   }
@@ -1947,59 +2573,43 @@ class ProgressRepository {
     return Verdict.fromJson(Map<String, dynamic>.from(list.first));
   }
 
-  /// When this course was last reset, or null if it never has been.
-  Future<DateTime?> _resetAt(String course) async {
-    final rows = await _db
-        .from('progress_resets')
-        .select('reset_at')
-        .eq('student_id', _uid)
-        .eq('course', course)
-        .limit(1);
-
-    if (rows.isEmpty) return null;
-    return DateTime.parse(rows.first['reset_at'] as String);
-  }
-
   /// Everything the chips, the resume card and the mastery header need.
   ///
   /// Attempts give the current run; unit_mastery gives the medals, which
   /// survive resets. Keeping those two separate is the whole reason a reset
   /// is safe to offer at all.
+  ///
+  /// The reset cutoff used to be a second round trip from here — see
+  /// progress_resets in my_progress.sql, which now applies it in the same
+  /// query rather than making the browser ask first and filter after.
+  ///
+  /// Every unit's progress, in one round trip and a bounded payload.
+  ///
+  /// This used to download every attempt row the student had ever made and
+  /// reduce it in the browser. At eight students that was invisible; the
+  /// query had no limit and grew for the life of an account, and it ran on
+  /// every load. my_progress does the reduction in Postgres and returns one
+  /// row per unit — six to nine, whatever happens.
+  ///
+  /// The two rules that used to live in the loop below now live in the SQL,
+  /// and are stated in its header: test rows do not count as solved, and
+  /// first-try is a set rather than a counter.
   Future<Map<String, UnitProgress>> fetchProgress(String course) async {
-    final since = await _resetAt(course);
-
-    var query = _db
-        .from('attempts')
-        .select('unit, sort_order, was_correct, was_first_attempt, source')
-        .eq('student_id', _uid)
-        .eq('course', course);
-
-    if (since != null) {
-      query = query.gt('answered_at', since.toIso8601String());
-    }
-
-    final attempts = await query;
+    final rows =
+        await _db.rpc('my_progress', params: {'p_course': course}) as List;
 
     final solved = <String, Set<int>>{};
     final firstTry = <String, Set<int>>{};
 
-    for (final row in attempts) {
-      if (row['was_correct'] != true) continue;
-      // A practice test writes an attempt per item so the diagnosis keeps
-      // learning from it. Those rows must NOT count as solved here: the
-      // level picker skips anything in this set, so counting them would
-      // silently remove questions from Quiz that the student had never
-      // worked through there — permanently, and with nothing on screen to
-      // say why. One fifteen-question test removed four.
-      if (row['source'] == 'test') continue;
+    for (final raw in rows) {
+      final row = Map<String, dynamic>.from(raw as Map);
       final unit = row['unit'] as String;
-      final order = row['sort_order'] as int;
-      solved.putIfAbsent(unit, () => <int>{}).add(order);
-      if (row['was_first_attempt'] == true) {
-        // A set, not a counter: a question answered right after three wrong
-        // taps must not be able to count more than once.
-        firstTry.putIfAbsent(unit, () => <int>{}).add(order);
-      }
+      solved[unit] = ((row['solved_orders'] as List?) ?? const [])
+          .map((e) => (e as num).toInt())
+          .toSet();
+      firstTry[unit] = ((row['first_try_orders'] as List?) ?? const [])
+          .map((e) => (e as num).toInt())
+          .toSet();
     }
 
     final mastery = await _db
@@ -2876,6 +3486,14 @@ class AuthGate extends StatelessWidget {
       return SharedReportScreen(token: sharedToken);
     }
 
+    // Same rule, same reason: a parent following a consent link has no
+    // account and must never meet a sign-in screen. The token is the whole
+    // of their visit.
+    final consentToken = Uri.base.queryParameters['consent'];
+    if (consentToken != null && consentToken.isNotEmpty) {
+      return GuardianConsentLandingScreen(token: consentToken);
+    }
+
     return StreamBuilder<AuthState>(
       stream: auth.onAuthStateChange,
       builder: (context, snapshot) {
@@ -2922,6 +3540,14 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _busy = false;
   String? _error;
   String? _notice;
+
+  /// Date of birth, collected only at signup.
+  ///
+  /// A date picker rather than three text fields, and rather than an age
+  /// box: an age typed as a number is the one a student will round, and it
+  /// is wrong a year later. The server takes the date and does the
+  /// arithmetic itself, so nothing here has to be trusted.
+  DateTime? _dob;
 
   /// The course catalogue, straight from the database. Loaded once on the
   /// way in so the picker is ready the moment somebody taps Register.
@@ -3002,6 +3628,21 @@ class _AuthScreenState extends State<AuthScreen> {
       setState(() => _error = 'Enter a valid email address.');
       return;
     }
+    // Checked here so the student is told before an account is made, and
+    // checked AGAIN on the server, which is the one that counts — see
+    // set_my_date_of_birth. This is the courtesy; that is the rule.
+    if (_registering && _dob == null) {
+      setState(() => _error = 'Please give your date of birth.');
+      return;
+    }
+    if (_registering && _dob != null) {
+      final years = _wholeYearsSince(_dob!);
+      if (years < kMinimumAge) {
+        setState(() => _error =
+            'You need to be at least $kMinimumAge to use Astro STEM Labs.');
+        return;
+      }
+    }
     if (_registering && _nameController.text.trim().length < 2) {
       setState(
           () => _error = 'Enter your name so your teacher knows who you are.');
@@ -3034,6 +3675,7 @@ class _AuthScreenState extends State<AuthScreen> {
           fullName: _nameController.text.trim(),
           grade: _courses.firstWhere((c) => c.code == chosen).grade,
           course: chosen,
+          dateOfBirth: _dob,
         );
         if (mounted) {
           switch (outcome) {
@@ -3042,17 +3684,26 @@ class _AuthScreenState extends State<AuthScreen> {
               break;
             case RegisterOutcome.confirmEmail:
               setState(() {
-                _notice = 'Account created. Check your email for a '
-                    'confirmation link, then sign in.';
+                _notice = _sameEitherWayNotice;
                 _registering = false;
               });
             case RegisterOutcome.alreadyExists:
-              // Flip them to the sign-in form and say why, rather than
-              // telling them to wait for an email that will never come.
+              // Say the SAME thing as a genuinely new signup.
+              //
+              // This used to read "You already have an account with this
+              // email", which is friendlier and is a user-enumeration
+              // leak: anybody could check whether an address has an Astro
+              // account by trying to register it. Supabase deliberately
+              // makes the two cases indistinguishable and this app used to
+              // undo that on purpose.
+              //
+              // The friendliness is not lost, only made unconditional. The
+              // wording covers both cases honestly — a new account really
+              // does need the email confirming, and an existing one really
+              // can be signed into — so nobody is told to wait for a
+              // message that never comes.
               setState(() {
-                _error = 'You already have an account with this email. '
-                    'Sign in instead — or use Forgot password if you have '
-                    'forgotten it.';
+                _notice = _sameEitherWayNotice;
                 _registering = false;
               });
           }
@@ -3209,6 +3860,11 @@ class _AuthScreenState extends State<AuthScreen> {
                             .toList(),
                         onChanged: (v) => setState(() => _course = v),
                       ),
+                    const SizedBox(height: 20),
+                    _DateOfBirthField(
+                      value: _dob,
+                      onChanged: (d) => setState(() => _dob = d),
+                    ),
                   ],
 
                   if (_error != null) ...[
@@ -3464,9 +4120,20 @@ class RoleGate extends StatefulWidget {
 class _RoleGateState extends State<RoleGate> {
   final _classes = ClassRepository();
   final _admin = AdminRepository();
+  final _safeguarding = SafeguardingRepository();
 
   // 'admin' | 'teacher' | 'student' | null while checking.
   String? _role;
+
+  /// Null until asked. Only students are asked: a tutor or an admin with an
+  /// account is not the person this protects.
+  ConsentStatus? _consent;
+
+  /// The student chose to carry on without consent. A session-only choice,
+  /// deliberately not saved — the next sign-in should put the explanation
+  /// back in front of them, because nothing is being saved and they should
+  /// be reminded of that rather than allowed to forget it.
+  bool _dismissedConsent = false;
 
   @override
   void initState() {
@@ -3484,14 +4151,30 @@ class _RoleGateState extends State<RoleGate> {
         return;
       }
       final teacher = await _classes.amITeacher();
+      if (teacher) {
+        if (!mounted) return;
+        setState(() => _role = 'teacher');
+        return;
+      }
+
+      final consent = await _safeguarding.status();
       if (!mounted) return;
-      setState(() => _role = teacher ? 'teacher' : 'student');
+      setState(() {
+        _consent = consent;
+        _role = 'student';
+      });
     } catch (_) {
       // If the check fails, fall back to the student app. Erring toward less
       // access rather than more is the right default here.
       if (!mounted) return;
       setState(() => _role = 'student');
     }
+  }
+
+  Future<void> _recheckConsent() async {
+    final consent = await _safeguarding.status();
+    if (!mounted) return;
+    setState(() => _consent = consent);
   }
 
   void _recheck() => setState(() => _role = null);
@@ -3511,6 +4194,19 @@ class _RoleGateState extends State<RoleGate> {
     }
     if (_role == 'teacher') {
       return TeacherHome(auth: widget.auth);
+    }
+
+    // A student under 18 whose guardian has not confirmed. Not a lock —
+    // there is a way past it, and past it the app works normally. What
+    // does NOT work is saving anything, and that is refused by the
+    // database rather than by this screen.
+    final consent = _consent;
+    if (consent != null && consent.needsGuardian && !_dismissedConsent) {
+      return GuardianConsentScreen(
+        status: consent,
+        onRecheck: _recheckConsent,
+        onContinueAnyway: () => setState(() => _dismissedConsent = true),
+      );
     }
 
     return HomePage(auth: widget.auth, onBecameTeacher: _recheck);
@@ -5075,6 +5771,35 @@ class _HomePageState extends State<HomePage> {
                 child: const Text('Reset my progress')),
           ),
         ]),
+        // Your data. Two rights, and they are rights rather than settings,
+        // so they sit in their own card and not in a menu.
+        card([
+          Text('Your data',
+              style: TextStyle(
+                  fontSize: 14.5, fontWeight: FontWeight.w600, color: kInk)),
+          const SizedBox(height: 4),
+          Text(
+            'Everything we hold about you, in one file. Or delete the '
+            'account and all of it, for good.',
+            style: TextStyle(fontSize: 12.5, height: 1.5, color: kInkSoft),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: _exportMyData,
+                child: const Text('Download my data'),
+              ),
+              const SizedBox(width: 4),
+              TextButton(
+                onPressed: _deleteMyAccount,
+                style: TextButton.styleFrom(foregroundColor: kWrong),
+                child: const Text('Delete my account'),
+              ),
+            ],
+          ),
+        ]),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
@@ -5086,6 +5811,154 @@ class _HomePageState extends State<HomePage> {
         ),
       ],
     );
+  }
+
+  /// Hands the student a JSON file of everything held about them.
+  ///
+  /// Built in the browser from what the server returns rather than fetched
+  /// as a file, because the server has no file to give — export_my_data
+  /// returns a document and this turns it into something you can keep.
+  Future<void> _exportMyData() async {
+    try {
+      final data = await SafeguardingRepository().export();
+      const encoder = JsonEncoder.withIndent('  ');
+      final text = encoder.convert(data);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: kCard,
+          title: Text('Your data',
+              style: TextStyle(fontSize: 17, color: kInk)),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'This is everything Astro STEM Labs holds about you. '
+                  'Copy it and save it wherever you like.',
+                  style:
+                      TextStyle(fontSize: 13, height: 1.5, color: kInkSoft),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  height: 240,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kTrack,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      text,
+                      style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontFamilyFallback: kMonoFallback,
+                        fontSize: 11,
+                        height: 1.45,
+                        color: kInk,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Clipboard.setData(ClipboardData(text: text)),
+              child: const Text('Copy all'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not build the export: $e')),
+      );
+    }
+  }
+
+  /// Deletes the account. Irreversible, and said so twice.
+  ///
+  /// The second confirmation is typing the word, not a second button. A
+  /// second button is a reflex; typing is a decision. This is the only
+  /// place in the app that asks for that, and it is the only action in the
+  /// app that cannot be undone.
+  Future<void> _deleteMyAccount() async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          backgroundColor: kCard,
+          title: Text('Delete your account?',
+              style: TextStyle(fontSize: 17, color: kInk)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This deletes your profile, every question you have '
+                'answered, your medals, your test papers and your photo. '
+                'It cannot be undone and there is no copy.',
+                style: TextStyle(fontSize: 13.5, height: 1.55, color: kInk),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'If you only want to start the course again, close this and '
+                'use Reset my progress instead.',
+                style: TextStyle(fontSize: 12.5, height: 1.5, color: kInkSoft),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                onChanged: (_) => setLocal(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Type DELETE to confirm',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep my account'),
+            ),
+            TextButton(
+              onPressed: controller.text.trim().toUpperCase() == 'DELETE'
+                  ? () => Navigator.of(context).pop(true)
+                  : null,
+              style: TextButton.styleFrom(foregroundColor: kWrong),
+              child: const Text('Delete everything'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+    try {
+      await SafeguardingRepository().deleteAccount();
+      // The session is now attached to a user that no longer exists, so
+      // sign out rather than leaving the app holding a dead token.
+      await widget.auth.signOut();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete the account: $e')),
+      );
+    }
   }
 
   Widget _buildContent() {

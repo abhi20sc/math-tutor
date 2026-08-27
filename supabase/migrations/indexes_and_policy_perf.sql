@@ -61,12 +61,18 @@ begin
   end loop;
 end $$;
 
--- rate_limit_hits has no primary key and no index that has ever been used,
--- because nothing writes to it. See the audit note in docs/PROJECT_STATE.md:
--- it is a table for a feature that was never built. Left in place rather
--- than dropped, because dropping it is a decision about whether rate
--- limiting is coming, and that is not a decision an index migration should
--- make quietly.
+-- rate_limit_hits was, when this file was written, a table with no primary
+-- key that nothing wrote to — a table for a feature that was never built.
+-- That is no longer true: student_safeguarding.sql now creates it properly,
+-- with a primary key on (bucket, window_start), and note_rate_limit writes
+-- to it on every sign-in, signup and password reset.
+--
+-- Nothing to do here. The note is kept because the old shape may still be
+-- sitting on a database that predates that migration, and a reader finding
+-- a keyless rate_limit_hits should know which of the two they are looking
+-- at. student_safeguarding.sql uses create table if not exists, so it will
+-- NOT reshape an existing one — on the live project, drop the old empty
+-- table before running it.
 
 -- Verify:
 --

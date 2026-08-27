@@ -62,10 +62,27 @@ const SITE = (Deno.env.get('SITE_URL') ?? 'https://example.netlify.app')
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
+// Locked to the site this app is actually served from.
+//
+// It was '*'. That is the default every Supabase edge-function example
+// ships with and it is wrong here: this endpoint starts a payment, and a
+// wildcard lets any page on the internet call it with a token it has got
+// hold of. The token is a bearer token in a header rather than a cookie, so
+// this was never CSRF — but "any origin may call our checkout endpoint" is
+// not a sentence worth defending when one line fixes it.
+//
+// SITE_URL already exists and is already required for the success and
+// cancel URLs, so there is no new secret to set. If it is unset, SITE falls
+// back to a placeholder that will not match any real origin, which fails
+// CLOSED — the browser refuses the response rather than the function
+// admitting everybody.
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': SITE,
   'Access-Control-Allow-Headers':
     'authorization, x-client-info, apikey, content-type',
+  // Tells a cache that the response depends on who asked, so a response cut
+  // for one origin is never replayed to another.
+  'Vary': 'Origin',
 };
 
 // Stripe's REST API takes form-encoded bodies. Doing this by hand keeps the
