@@ -51,6 +51,9 @@
 //   No password reset flow yet. Supabase supports it through
 //   auth.resetPasswordForEmail; it needs a screen building.
 
+// Trigonometry, for the mindmap's leaf fan.
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 // Clipboard, for copying the share link.
 import 'package:flutter/services.dart';
@@ -4158,6 +4161,109 @@ class _HomePageState extends State<HomePage> {
   String _railView = 'topics';
   bool _wideLayout = false;
 
+  // How the student is looking at the course while no unit is open: the
+  // classroom — a list, a resume card and the sections — or the map.
+  //
+  // Two ways to browse the same curriculum, not two products. Some students
+  // read a list faster than they read a map, and the reverse is true often
+  // enough that picking one for everybody would be picking wrong for half
+  // of them. A per-session choice rather than a saved preference: it costs
+  // one tap to change and guessing wrong costs more.
+  String _topicView = 'classroom';
+
+  /// The map needs a band per unit and per subtopic, which only my_report
+  /// computes. Loaded the first time the map is opened rather than on the
+  /// way in, because most sessions never open it.
+  final ReportRepository _mapRepo = ReportRepository();
+  ReportData? _mapData;
+  bool _loadingMap = false;
+  String? _mapError;
+
+  Future<void> _loadMap() async {
+    if (_loadingMap || _mapData != null) return;
+    setState(() {
+      _loadingMap = true;
+      _mapError = null;
+    });
+    try {
+      final data = await _mapRepo.mine();
+      if (!mounted) return;
+      setState(() {
+        _mapData = data;
+        _loadingMap = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _mapError = 'Could not load the map.';
+        _loadingMap = false;
+      });
+    }
+  }
+
+  /// Map or Classroom. Only shown while no unit is open — once a student is
+  /// inside a unit the choice is about how to BROWSE, and there is nothing
+  /// left to browse.
+  Widget _buildTopicViewToggle() => SegmentedTabs(
+        labels: const ['Classroom', 'Map'],
+        selected: _topicView == 'map' ? 1 : 0,
+        onSelect: (i) => _showTopicView(i == 1 ? 'map' : 'classroom'),
+      );
+
+  void _showTopicView(String view) {
+    setState(() => _topicView = view);
+    if (view == 'map') _loadMap();
+  }
+
+  /// The map, as its own pane. Not inside the scrolling column: a canvas you
+  /// pan needs the whole area, and a pannable canvas inside a scroll view is
+  /// a fight over every drag.
+  Widget _buildMapPane() {
+    if (_loadingMap && _mapData == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_mapError != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_mapError!, style: TextStyle(fontSize: 14, color: kInkSoft)),
+            const SizedBox(height: 12),
+            TextButton(onPressed: _loadMap, child: const Text('Try again')),
+          ],
+        ),
+      );
+    }
+    final data = _mapData;
+    if (data == null || data.units.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'The map fills in as you work. Answer a few questions and every '
+            'unit and subtopic will appear here, coloured by how it is going.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, height: 1.55, color: kInkSoft),
+          ),
+        ),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, box) => _MindMap(
+        units: data.units,
+        centreLabel: _profile?.courseLabel ?? 'My course',
+        height: box.maxHeight,
+        // Nothing to scroll past here, so nothing to trap. The scrim exists
+        // for the report, where the map sits inside a scrolling page.
+        sleepUntilTapped: false,
+        onOpenUnit: (unit) {
+          _showTopicView('classroom');
+          _selectUnit(unit);
+        },
+      ),
+    );
+  }
+
   // Which of the sections the student is working in. Learn and Quiz share
   // the same unit list, so this sits BESIDE _railView rather than replacing
   // it: picking a topic keeps you in the section you were already in, which
@@ -4199,6 +4305,19 @@ class _HomePageState extends State<HomePage> {
           builder: (context, constraints) {
             _wideLayout = constraints.maxWidth >= 980;
             if (!_wideLayout) {
+              if (_topicView == 'map' && _selectedUnit == null) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildTopicViewToggle(),
+                      const SizedBox(height: 12),
+                      Expanded(child: _buildMapPane()),
+                    ],
+                  ),
+                );
+              }
               return Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 640),
@@ -4210,23 +4329,41 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
             }
+            final onMap = _railView == 'topics' &&
+                _topicView == 'map' &&
+                _selectedUnit == null;
             return Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildRail(),
                 Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 680),
-                      child: SingleChildScrollView(
-                        controller: _scroll,
-                        padding: const EdgeInsets.all(28),
-                        child: _railView == 'profile'
-                            ? _buildProfilePane()
-                            : _buildContent(),
-                      ),
-                    ),
-                  ),
+                  child: onMap
+                      // The map gets the whole pane, unconstrained and
+                      // unscrolled. Everything else keeps the reading
+                      // measure it has always had.
+                      ? Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildTopicViewToggle(),
+                              const SizedBox(height: 14),
+                              Expanded(child: _buildMapPane()),
+                            ],
+                          ),
+                        )
+                      : Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 680),
+                            child: SingleChildScrollView(
+                              controller: _scroll,
+                              padding: const EdgeInsets.all(28),
+                              child: _railView == 'profile'
+                                  ? _buildProfilePane()
+                                  : _buildContent(),
+                            ),
+                          ),
+                        ),
                 ),
               ],
             );
@@ -4983,6 +5120,13 @@ class _HomePageState extends State<HomePage> {
             progress: _unitProgress[_resumable!.name]!,
             onContinue: () => _selectUnit(_resumable!.name),
           ),
+        ],
+
+        // Map or Classroom, above the overview, because it governs
+        // everything below it.
+        if (_units.isNotEmpty && _selectedUnit == null) ...[
+          const SizedBox(height: 16),
+          _buildTopicViewToggle(),
         ],
 
         // The overview strip is for choosing what to work on. Once a unit is
@@ -15082,19 +15226,129 @@ class _MasteryPercent extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// The mindmap's leaf fan
+// ---------------------------------------------------------------------------
+//
+// Out here rather than inside the State so it can be tested without pumping
+// a widget. It is the piece of this screen most likely to be quietly wrong:
+// an overlap shows up only on a unit with exactly the wrong number of
+// subtopics, and only once that unit is expanded.
+
+const double kLeafMaxSpanDeg = 230.0;
+const double kLeafSpanPerGap = 34.0;
+/// The floor on how far a leaf sits from its unit.
+///
+/// It only ever binds at a count of one, because the chord spacing below
+/// puts every multi-leaf fan at 338 or more. At one it is the whole rule,
+/// and 110 — the value carried over from the app this layout came from —
+/// was not enough: half a unit node is 115 and half a subtopic node is 97,
+/// so a single leaf directly outward needs 212 to clear its own parent and
+/// was landing on top of it instead.
+const double kLeafMinRadius = 220.0;
+
+/// NOT safe to shorten. Because alternating leaves sit closer in, the
+/// tightest pair is not always the two immediate neighbours, so this cannot
+/// be reasoned about from the angular step alone — it has to be checked
+/// against the node's own box, at every count. test/widget_test.dart does
+/// exactly that, and fails below this value.
+const double kLeafTargetChord = 225.0;
+
+/// Where each of [count] subtopics sits relative to its unit: an angle off
+/// the outward direction, and a radius.
+///
+/// The arc widens with the count, so two subtopics stay near each other
+/// rather than being flung to the far top and bottom of the available space,
+/// the way a small cluster of real leaves would. Radius is whatever keeps
+/// neighbours [kLeafTargetChord] apart at that angular spacing. Alternating
+/// leaves sit slightly closer in, which is what stops the ring reading as a
+/// drawn circle.
+List<({double angleDeg, double radius})> mindmapLeafLayout(int count) {
+  if (count <= 0) return const [];
+  if (count == 1) return const [(angleDeg: 0.0, radius: kLeafMinRadius)];
+
+  final span = math.min(kLeafMaxSpanDeg, kLeafSpanPerGap * (count - 1));
+  final angleStep = span / (count - 1);
+  final spacingRad = angleStep * math.pi / 180;
+  final radius = math.max(
+    kLeafMinRadius,
+    kLeafTargetChord / (2 * math.sin(spacingRad / 2)),
+  );
+  return [
+    for (var i = 0; i < count; i++)
+      (
+        angleDeg: -span / 2 + i * angleStep,
+        radius: radius * (i.isEven ? 1.0 : 0.88),
+      ),
+  ];
+}
+
+/// How far a fan of [count] leaves reaches outward from its unit, and back
+/// toward the root. Used to space units along a row so one unit's fan can
+/// never reach into its neighbour's.
+({double towardRoot, double outward}) mindmapFanReach(int count) {
+  if (count <= 0) return (towardRoot: 0, outward: 0);
+  var outward = 0.0, towardRoot = 0.0;
+  for (final leaf in mindmapLeafLayout(count)) {
+    // angleDeg is relative to outward, so this is the same on either side
+    // and can be computed once, unsigned.
+    final x = leaf.radius * math.cos(leaf.angleDeg * math.pi / 180);
+    outward = math.max(outward, x);
+    towardRoot = math.max(towardRoot, -x);
+  }
+  return (towardRoot: towardRoot, outward: outward);
+}
+
 class _MindMap extends StatefulWidget {
   final List<UnitStat> units;
   final String centreLabel;
 
-  const _MindMap({required this.units, required this.centreLabel});
+  /// How tall the canvas is. The report embeds the map in a scrolling page
+  /// and gives it a fixed strip; the topics pane hands it the whole area.
+  final double? height;
+
+  /// Whether the map starts dormant behind a tap-to-wake scrim. True inside
+  /// the scrolling report, where a live InteractiveViewer is a scroll trap.
+  /// False when the map IS the page and there is nothing to scroll past.
+  final bool sleepUntilTapped;
+
+  /// Open this unit in the app. Null in the report, where the map is a
+  /// picture of how things are going rather than a way in.
+  final void Function(String unit)? onOpenUnit;
+
+  const _MindMap({
+    required this.units,
+    required this.centreLabel,
+    this.height,
+    this.sleepUntilTapped = true,
+    this.onOpenUnit,
+  });
 
   @override
   State<_MindMap> createState() => _MindMapState();
 }
 
 class _MindMapState extends State<_MindMap> {
-  static const _canvas = Size(2400, 1600);
-  static const _centre = Offset(1200, 800);
+  // A large fixed logical canvas the map lives on. Nodes are positioned
+  // freely within it and the InteractiveViewer pans and zooms around it.
+  // Bigger than any real course needs, because a canvas that runs out is a
+  // node that cannot be dragged where the student wants it.
+  static const _canvas = Size(4400, 4400);
+  static const _centre = Offset(2200, 2200);
+
+  // Units grow outward from the root toward the left and right margins in a
+  // roughly horizontal row, the way a horizontal mind map's primary
+  // branches do. Only the subtopics branch vertically.
+  static const _unitOffsetX = 260.0;
+  static const _unitRowGap = 85.0;
+
+  // Subtopics fan out around their unit like leaves around a branch tip
+  // rather than stacking in a column to one side. They spread across an arc
+  // centred on the "outward" direction — away from the root — widening as
+  // there are more of them, with the cone back toward the root left clear
+  // so nothing crosses the line to the parent.
+  static const _minZoom = 0.18;
+  static const _maxZoom = 2.2;
 
   final TransformationController _transform = TransformationController();
 
@@ -15106,12 +15360,7 @@ class _MindMapState extends State<_MindMap> {
   bool _canvasGestures = true;
   Size _viewport = Size.zero;
 
-  // The map starts dormant. A full-width InteractiveViewer in the middle of
-  // a scrolling page is a scroll trap: the wheel zooms instead of
-  // scrolling, and on a phone any drag that begins on the map pans the
-  // canvas instead of the page. Until the student taps it, the map is a
-  // picture; the tap wakes the gestures up.
-  bool _awake = false;
+  late bool _awake = !widget.sleepUntilTapped;
 
   @override
   void dispose() {
@@ -15119,52 +15368,125 @@ class _MindMapState extends State<_MindMap> {
     super.dispose();
   }
 
+  // -------------------------------------------------------------------------
+  // Layout
+  // -------------------------------------------------------------------------
+
+  /// How far a unit's leaf fan reaches outward, and back toward the root.
+  /// Used to give each unit in a row just enough room that its fan can
+  /// never reach into its neighbour's.
+  ({double towardRoot, double outward}) _fanReach(int unitIndex) =>
+      mindmapFanReach(widget.units[unitIndex].subtopics.length);
+
   void _ensureLayout() {
     if (_laidOut) return;
     _laidOut = true;
     _positions['root'] = _centre;
 
-    // Units fan out left and right of the root, alternating sides, the
-    // classic two-sided mindmap silhouette.
+    // Alternating sides, so the two wings stay about the same length.
     final right = <int>[];
     final left = <int>[];
     for (var i = 0; i < widget.units.length; i++) {
       (i.isEven ? right : left).add(i);
     }
-    void place(List<int> side, double sign) {
-      const spacing = 130.0;
-      final startY = _centre.dy - (side.length - 1) * spacing / 2;
+
+    void placeSide(List<int> side, double sign) {
+      if (side.isEmpty) return;
+      var cursorX = _centre.dx + sign * _unitOffsetX;
+      var previousOutward = 0.0;
       for (var i = 0; i < side.length; i++) {
-        _positions['u${side[i]}'] =
-            Offset(_centre.dx + sign * 260, startY + i * spacing);
+        final reach = _fanReach(side[i]);
+        if (i > 0) {
+          cursorX += sign * (previousOutward + _unitRowGap + reach.towardRoot);
+        }
+        _positions['u${side[i]}'] = Offset(cursorX, _centre.dy);
+        previousOutward = reach.outward;
       }
     }
 
-    place(right, 1);
-    place(left, -1);
+    placeSide(right, 1);
+    placeSide(left, -1);
   }
 
   void _ensureSubtopicPositions(int unitIndex) {
     final unit = widget.units[unitIndex];
     final unitPos = _positions['u$unitIndex']!;
     final sign = unitPos.dx >= _centre.dx ? 1.0 : -1.0;
-    const spacing = 54.0;
-    final startY = unitPos.dy - (unit.subtopics.length - 1) * spacing / 2;
+    // Outward — directly away from the root — is the centre of the fan.
+    final outwardDeg = sign > 0 ? 0.0 : 180.0;
+
+    final leaves = mindmapLeafLayout(unit.subtopics.length);
     for (var i = 0; i < unit.subtopics.length; i++) {
-      _positions.putIfAbsent('u$unitIndex-s$i',
-          () => Offset(unitPos.dx + sign * 230, startY + i * spacing));
+      final id = 'u$unitIndex-s$i';
+      if (_positions.containsKey(id)) continue;
+      final angleRad = (outwardDeg + leaves[i].angleDeg) * math.pi / 180;
+      _positions[id] = unitPos +
+          Offset(
+            leaves[i].radius * math.cos(angleRad),
+            leaves[i].radius * math.sin(angleRad),
+          );
     }
   }
 
-  void _centreView() {
-    if (_viewport == Size.zero) return;
-    // Fit-to-width start: zoomed out enough to see both wings.
-    final scale = (_viewport.width / 1150).clamp(0.3, 1.0);
+  // -------------------------------------------------------------------------
+  // View
+  // -------------------------------------------------------------------------
+
+  /// Fits everything currently visible into the viewport at once — the root,
+  /// every unit, and the subtopics of every expanded unit.
+  ///
+  /// Called after the first layout, after every expand and collapse, after a
+  /// resize, and from Reset view. Each of those is a moment where what needs
+  /// to be on screen just changed, which is exactly when refitting is right
+  /// and any other time it would be the map moving under the student's hand.
+  void _fitToContent() {
+    // Reached from a post-frame callback, which can outlive the widget.
+    if (!mounted || _viewport == Size.zero) return;
+    final root = _positions['root'];
+    if (root == null) return;
+
+    var minX = root.dx, maxX = root.dx, minY = root.dy, maxY = root.dy;
+    void include(Offset? p) {
+      if (p == null) return;
+      minX = math.min(minX, p.dx);
+      maxX = math.max(maxX, p.dx);
+      minY = math.min(minY, p.dy);
+      maxY = math.max(maxY, p.dy);
+    }
+
+    for (var i = 0; i < widget.units.length; i++) {
+      include(_positions['u$i']);
+      if (!_expanded.contains('u$i')) continue;
+      for (var sIndex = 0;
+          sIndex < widget.units[i].subtopics.length;
+          sIndex++) {
+        include(_positions['u$i-s$sIndex']);
+      }
+    }
+
+    // Padding around the bounding box of node CENTRES, so the widest boxes
+    // do not end up flush against the edge. Nodes are much wider than they
+    // are tall, so they need less room above and below.
+    const padX = 170.0;
+    const padY = 90.0;
+    final contentW = (maxX - minX) + padX * 2;
+    final contentH = (maxY - minY) + padY * 2;
+    final centre = Offset((minX + maxX) / 2, (minY + maxY) / 2);
+
+    final scale = math
+        .min(contentW > 0 ? _viewport.width / contentW : _maxZoom,
+            contentH > 0 ? _viewport.height / contentH : _maxZoom)
+        .clamp(_minZoom, _maxZoom);
+
     setState(() {
       _transform.value = Matrix4.identity()
-        ..translateByDouble(_viewport.width / 2 - _centre.dx * scale,
-            _viewport.height / 2 - _centre.dy * scale, 0, 1)
-        ..scaleByDouble(scale, scale, 1, 1);
+        ..translateByDouble(_viewport.width / 2 - centre.dx * scale,
+            _viewport.height / 2 - centre.dy * scale, 0, 1)
+        // Scaling z as well as x and y matters: getMaxScaleOnAxis takes the
+        // max across all three, so leaving z at 1 makes it impossible to
+        // read a scale below 1 back out — and the drag maths below divides
+        // by exactly that value.
+        ..scaleByDouble(scale, scale, scale, 1);
     });
   }
 
@@ -15177,23 +15499,56 @@ class _MindMapState extends State<_MindMap> {
         _expanded.add('u$i');
       }
     });
+    _fitToContent();
   }
+
+  /// Back to the map a student sees on first opening the course: every unit
+  /// collapsed, every node back where the layout put it, fitted to the
+  /// viewport. The one button that undoes any amount of dragging.
+  void _resetView() {
+    setState(() {
+      _positions.clear();
+      _expanded.clear();
+      _laidOut = false;
+      _ensureLayout();
+    });
+    _fitToContent();
+  }
+
+  /// Drags a unit together with every subtopic already placed under it,
+  /// expanded or not, so the whole branch moves as one piece the way it
+  /// would in a real mindmap instead of leaving its leaves behind.
+  void _moveUnit(int unitIndex, Offset delta) {
+    final scale = _transform.value.getMaxScaleOnAxis();
+    final scaled = delta / scale;
+    setState(() {
+      _positions['u$unitIndex'] = _positions['u$unitIndex']! + scaled;
+      for (var i = 0; i < widget.units[unitIndex].subtopics.length; i++) {
+        final id = 'u$unitIndex-s$i';
+        final pos = _positions[id];
+        if (pos != null) _positions[id] = pos + scaled;
+      }
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Build
+  // -------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     _ensureLayout();
     return LayoutBuilder(
       builder: (context, box) {
-        final size = Size(box.maxWidth, 380);
+        final height = widget.height ?? 380;
+        final size = Size(box.maxWidth, height);
         if (size != _viewport) {
-          final first = _viewport == Size.zero;
           _viewport = size;
-          if (first) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => _centreView());
-          }
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _fitToContent());
         }
         return SizedBox(
-          height: 380,
+          height: height,
           child: Stack(
             children: [
               ClipRRect(
@@ -15204,13 +15559,18 @@ class _MindMapState extends State<_MindMap> {
                     borderRadius: BorderRadius.circular(13),
                     border: Border.all(color: kLine),
                   ),
+                  // Zoom is InteractiveViewer's own: pinch on a trackpad,
+                  // scroll on a wheel. A second Cmd/Ctrl+scroll handler was
+                  // written for this and then taken out again — the viewer
+                  // already reacts to the same tick, so both would apply a
+                  // zoom to it and compound.
                   child: InteractiveViewer(
                     transformationController: _transform,
                     constrained: false,
                     panEnabled: _awake && _canvasGestures,
                     scaleEnabled: _awake && _canvasGestures,
-                    minScale: 0.3,
-                    maxScale: 2.2,
+                    minScale: _minZoom,
+                    maxScale: _maxZoom,
                     boundaryMargin: const EdgeInsets.all(800),
                     child: SizedBox(
                       width: _canvas.width,
@@ -15234,6 +15594,7 @@ class _MindMapState extends State<_MindMap> {
                   ),
                 ),
               ),
+
               // Dormant state: a transparent layer that absorbs the first
               // tap, wakes the map, and until then lets the page scroll
               // straight over it.
@@ -15266,33 +15627,32 @@ class _MindMapState extends State<_MindMap> {
                     ),
                   ),
                 ),
+
               Positioned(
                 right: 8,
                 top: 8,
-                child: IconButton(
-                  tooltip: 'Reset map',
-                  onPressed: () {
-                    setState(() {
-                      _positions.clear();
-                      _expanded.clear();
-                      _laidOut = false;
-                      _ensureLayout();
-                    });
-                    _centreView();
-                  },
-                  icon: Icon(Icons.center_focus_strong_rounded,
-                      size: 19, color: kInkSoft),
+                child: Material(
+                  color: kCard.withValues(alpha: 0.9),
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    tooltip: 'Reset view',
+                    onPressed: _resetView,
+                    icon: Icon(Icons.center_focus_strong_rounded,
+                        size: 19, color: kInkSoft),
+                  ),
                 ),
               ),
+
               if (_awake)
                 Positioned(
                   left: 12,
                   bottom: 10,
                   child: Text(
-                  'Drag to pan \u00b7 pinch or scroll to zoom \u00b7 tap a unit to open it',
-                  style: TextStyle(fontSize: 10.5, color: kInkSoft),
+                    'Drag to pan, or to move a topic · pinch or scroll to '
+                    'zoom · tap a unit to open its subtopics',
+                    style: TextStyle(fontSize: 10.5, color: kInkSoft),
+                  ),
                 ),
-              ),
             ],
           ),
         );
@@ -15303,16 +15663,22 @@ class _MindMapState extends State<_MindMap> {
   List<Widget> _buildNodes() {
     final nodes = <Widget>[];
 
-    void addNode(String id, Widget child, {VoidCallback? onTap}) {
+    void addNode(
+      String id,
+      Widget child, {
+      VoidCallback? onTap,
+      void Function(Offset delta)? onDrag,
+    }) {
       final pos = _positions[id];
       if (pos == null) return;
       nodes.add(_MapNode(
         position: pos,
         onDragStart: () => setState(() => _canvasGestures = false),
-        onDragUpdate: (delta) {
-          final scale = _transform.value.getMaxScaleOnAxis();
-          setState(() => _positions[id] = _positions[id]! + delta / scale);
-        },
+        onDragUpdate: onDrag ??
+            (delta) {
+              final scale = _transform.value.getMaxScaleOnAxis();
+              setState(() => _positions[id] = _positions[id]! + delta / scale);
+            },
         onDragEnd: () => setState(() => _canvasGestures = true),
         onTap: onTap,
         child: child,
@@ -15342,59 +15708,86 @@ class _MindMapState extends State<_MindMap> {
       final open = _expanded.contains('u$i');
       addNode(
         'u$i',
-        Container(
-          constraints: const BoxConstraints(maxWidth: 190),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: kCard,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: colour, width: 2),
-            boxShadow: kCardShadow,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration:
-                    BoxDecoration(color: colour, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  unit.unit,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: kInk),
+        Semantics(
+          button: true,
+          expanded: open,
+          label: '${unit.unit}, ${bandWord(unit.band).toLowerCase()}',
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 230),
+            padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: colour, width: 2),
+              boxShadow: kCardShadow,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration:
+                      BoxDecoration(color: colour, shape: BoxShape.circle),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                  size: 15, color: kInkSoft),
-            ],
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    unit.unit,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: kInk),
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                    open
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    size: 15,
+                    color: kInkSoft),
+                // The map is a way in, not only a picture — but opening a
+                // unit is a separate, deliberate tap from spreading it out
+                // to look at. Tapping the node itself only ever expands.
+                if (widget.onOpenUnit != null) ...[
+                  const SizedBox(width: 2),
+                  InkResponse(
+                    radius: 16,
+                    onTap: () => widget.onOpenUnit!(unit.unit),
+                    child: Tooltip(
+                      message: 'Open ${unit.unit}',
+                      child: Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: Icon(Icons.arrow_forward_rounded,
+                            size: 15, color: kAccent),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
         onTap: () => _toggleUnit(i),
+        onDrag: (delta) => _moveUnit(i, delta),
       );
 
       if (!open) continue;
-      for (var s = 0; s < unit.subtopics.length; s++) {
-        final sub = unit.subtopics[s];
+      for (var sIndex = 0; sIndex < unit.subtopics.length; sIndex++) {
+        final sub = unit.subtopics[sIndex];
         final subColour = bandColour(sub.band);
         addNode(
-          'u$i-s$s',
+          'u$i-s$sIndex',
           Tooltip(
             message: sub.firstTryRate == null
-                ? '${sub.label} \u2014 not started'
-                : '${sub.label} \u2014 ${sub.firstTryRate}% first try '
+                ? '${sub.label} — not started'
+                : '${sub.label} — ${sub.firstTryRate}% first try '
                     '(${bandWord(sub.band).toLowerCase()})',
             child: Container(
               constraints: const BoxConstraints(maxWidth: 175),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: kCard,
                 borderRadius: BorderRadius.circular(999),
@@ -15407,8 +15800,8 @@ class _MindMapState extends State<_MindMap> {
                   Container(
                     width: 8,
                     height: 8,
-                    decoration: BoxDecoration(
-                        color: subColour, shape: BoxShape.circle),
+                    decoration:
+                        BoxDecoration(color: subColour, shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 6),
                   Flexible(

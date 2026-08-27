@@ -15,6 +15,8 @@
 // Server-side behaviour is covered by tests/test_ama.sql (212 checks) and
 // tests/test_sections.sql (55). This file covers what happens in the browser.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 // `hide main` because main.dart declares one and so does this file. A local
@@ -231,6 +233,89 @@ void main() {
     // without a course behind it, this is what says so.
     final open = AstroSubject.values.where((s) => s.available).toList();
     expect(open, [AstroSubject.maths]);
+  });
+
+  // -------------------------------------------------------------------------
+  // The mindmap's leaf fan
+  // -------------------------------------------------------------------------
+  //
+  // The fan is the one piece of this app whose bug is invisible until a
+  // specific course has a specific number of subtopics in one unit AND a
+  // student expands it. Checking it by eye means expanding forty units.
+  group('mindmap leaf fan', () {
+    // The subtopic node, as it is actually built: maxWidth 175 plus 10px of
+    // padding each side, and about 34 tall. Two nodes overlap when their
+    // centres are closer than this in BOTH axes at once.
+    const nodeW = 195.0;
+    const nodeH = 34.0;
+
+    // Every real subtopics-per-unit count across the six courses, widened at
+    // both ends so a new course cannot walk off the tested range unnoticed.
+    const counts = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+    List<Offset> placed(int count) => [
+          for (final leaf in mindmapLeafLayout(count))
+            Offset(
+              leaf.radius * math.cos(leaf.angleDeg * math.pi / 180),
+              leaf.radius * math.sin(leaf.angleDeg * math.pi / 180),
+            ),
+        ];
+
+    test('no two subtopics overlap, at any real count', () {
+      for (final count in counts) {
+        final points = placed(count);
+        for (var i = 0; i < points.length; i++) {
+          for (var j = i + 1; j < points.length; j++) {
+            final dx = (points[i].dx - points[j].dx).abs();
+            final dy = (points[i].dy - points[j].dy).abs();
+            expect(dx >= nodeW || dy >= nodeH, isTrue,
+                reason: 'count $count: leaves $i and $j overlap '
+                    '(dx ${dx.toStringAsFixed(1)}, '
+                    'dy ${dy.toStringAsFixed(1)})');
+          }
+        }
+      }
+    });
+
+    test('the fan never wraps back around toward the root', () {
+      // The span is capped so the two end leaves cannot swing behind the
+      // unit and cross the line back to its parent.
+      for (final count in counts) {
+        for (final leaf in mindmapLeafLayout(count)) {
+          expect(leaf.angleDeg.abs(), lessThanOrEqualTo(kLeafMaxSpanDeg / 2));
+        }
+      }
+    });
+
+    test('no leaf lands on top of its own unit', () {
+      // This is the check that caught the real one. At a count of one the
+      // leaf goes straight outward at kLeafMinRadius, and at the value
+      // inherited from the app this layout came from that put it 102px
+      // inside the unit node it hangs off.
+      //
+      // Note the fan's outward reach is NOT monotonic in the count — it
+      // runs 368, 339, 368, 385, 368 across counts 2 to 6, because the
+      // radius depends on the angular step and the step is pinned at 34
+      // degrees until the span caps. Asserting it grows would be asserting
+      // something false.
+      const unitW = 230.0;
+      const unitH = 40.0;
+      for (final count in counts) {
+        for (final p in placed(count)) {
+          expect(p.dx.abs() >= (unitW + nodeW) / 2 ||
+                  p.dy.abs() >= (unitH + nodeH) / 2, isTrue,
+              reason: 'count $count: a leaf at '
+                  '(${p.dx.toStringAsFixed(1)}, ${p.dy.toStringAsFixed(1)}) '
+                  'overlaps its own unit');
+        }
+      }
+    });
+
+    test('a unit with no subtopics asks for no room', () {
+      expect(mindmapLeafLayout(0), isEmpty);
+      expect(mindmapFanReach(0).outward, 0);
+      expect(mindmapFanReach(0).towardRoot, 0);
+    });
   });
 
   testWidgets('an unopened subject says so rather than doing nothing',
