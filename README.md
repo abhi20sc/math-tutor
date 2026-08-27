@@ -270,24 +270,29 @@ in `docs/LAUNCH_CHECKLIST.md`:
 
 Still open, and honestly still open:
 
-- The Astro+ enrolment flow. Six functions exist in `astro_sections.sql`
-  with no interface: `request_enrolment`, `my_enrolment_status`,
-  `cancel_enrolment`, `enrolment_by_token`, `admin_list_enrolments`,
-  `admin_mark_enrolment`. The server half is built and tested; the client
-  half is not written.
-- Best test score on the topic map. `my_percentages`, `my_unit_percentages`
-  and `my_subtopics` are written and unused for the same reason.
-- `lib/main.dart` is one file at 16,000 lines. Splitting it is the next
+- `lib/main.dart` is one file at 17,000 lines. Splitting it is the next
   structural job, and it is also the only real lever left on the payload:
   1,056 KB gzipped, against a sensible budget of about 200 KB, and deferred
   loading needs module boundaries to defer.
-- Sending the guardian consent link by email. Today the app hands the
-  student the link to pass on, because there is no email function in this
-  project. That is honest rather than finished.
+- Email needs a Resend key. `supabase/functions/send-link` is written and
+  refuses cleanly without one — the app falls back to showing the student
+  the link to pass on, which is the path that has actually been used.
 - Nothing schedules `purge_rate_limits`. The counters are small and the
   table is harmless, but the tidy-up is a manual one-liner until something
   runs it.
 - Mobile layout pass, and a keyboard route through the mindmap.
+
+Closed since the last pass, and worth naming because the README claimed
+them as open for a while:
+
+- **The Astro+ enrolment flow now has an interface.** The six functions had
+  no caller because nothing ever returned `pay_token` — the parent's link
+  was unreachable outside the SQL editor. `enrolment_links.sql` adds the
+  two functions that hand it out, and there is now a student form, a link
+  to pass on, a parent-facing payment page, and an admin queue.
+- **Best test score is on the topic map.** `my_percentages` supplies it.
+  The Dart side had been built and tested for months and was receiving an
+  empty map.
 
 `docs/PROJECT_STATE.md` is the honest, current account of all of it.
 

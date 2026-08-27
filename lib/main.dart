@@ -1682,6 +1682,7 @@ class _GuardianConsentScreenState extends State<GuardianConsentScreen> {
   bool _busy = false;
   String? _error;
   String? _link;
+  String? _sentTo;
 
   @override
   void initState() {
@@ -1707,12 +1708,15 @@ class _GuardianConsentScreenState extends State<GuardianConsentScreen> {
     });
     try {
       final token = await _safeguarding.requestGuardianConsent(email);
+      // Ask the server to email it. Falls back to showing the link when
+      // email is not set up, which is a normal answer rather than an
+      // error — see trySendLink.
+      final sentTo = await trySendLink('consent');
       if (!mounted) return;
       setState(() {
-        // The app cannot send mail — there is no email function in this
-        // project yet. So it hands the student the link to pass on, which
-        // is honest about what it can do rather than showing a "sent!"
-        // that is not true.
+        _sentTo = sentTo;
+        // Shown either way. "We emailed your mum" is not reassuring on its
+        // own, and a link the student can also send costs nothing.
         _link = Uri.base.resolve('?consent=$token').toString();
         _busy = false;
       });
@@ -1791,8 +1795,14 @@ class _GuardianConsentScreenState extends State<GuardianConsentScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Send this to them. Opening it is all they have '
-                            'to do. Making a new link stops this one working.',
+                            _sentTo != null
+                                ? 'Sent to $_sentTo. If it has not arrived, '
+                                    'check spam — or send them this link '
+                                    'yourself. Making a new link stops this '
+                                    'one working.'
+                                : 'Send this to them. Opening it is all they '
+                                    'have to do. Making a new link stops this '
+                                    'one working.',
                             style: TextStyle(
                                 fontSize: 12.5, height: 1.5, color: kInkSoft),
                           ),
@@ -2017,6 +2027,237 @@ class ConsentStatus {
   /// A database that predates student_safeguarding.sql. Nothing is blocked,
   /// which matches what the server does — see consent_required.
   static const unknown = ConsentStatus(needsGuardian: false);
+}
+
+/// One Astro+ enrolment request, as the student who made it sees it.
+class EnrolmentStatus {
+  final int requestId;
+  /// 'new' | 'sent' | 'paid' | 'cancelled'
+  final String status;
+  final String plan;
+  final String method;
+  final String parentName;
+  final String parentEmail;
+  final DateTime? emailedAt;
+  final DateTime? createdAt;
+
+  const EnrolmentStatus({
+    required this.requestId,
+    required this.status,
+    required this.plan,
+    required this.method,
+    required this.parentName,
+    required this.parentEmail,
+    this.emailedAt,
+    this.createdAt,
+  });
+
+  bool get open => status == 'new' || status == 'sent';
+  bool get paid => status == 'paid';
+
+  String get planLabel => plan == 'annual' ? 'Astro+ yearly' : 'Astro+ monthly';
+  String get methodLabel =>
+      method == 'etransfer' ? 'Interac e-transfer' : 'Card';
+
+  factory EnrolmentStatus.fromJson(Map<String, dynamic> j) => EnrolmentStatus(
+        requestId: (j['request_id'] as num).toInt(),
+        status: j['status'] as String? ?? 'new',
+        plan: j['plan'] as String? ?? 'monthly',
+        method: j['method'] as String? ?? 'stripe',
+        parentName: j['parent_name'] as String? ?? '',
+        parentEmail: j['parent_email'] as String? ?? '',
+        emailedAt: j['emailed_at'] == null
+            ? null
+            : DateTime.tryParse(j['emailed_at'] as String),
+        createdAt: j['created_at'] == null
+            ? null
+            : DateTime.tryParse(j['created_at'] as String),
+      );
+}
+
+/// One request as the ADMIN sees it — the same row plus who it belongs to
+/// and how to reach them.
+class EnrolmentRequest {
+  final int requestId;
+  final String studentName;
+  final String accountEmail;
+  final int grade;
+  final String schoolBoard;
+  final String? school;
+  final String parentName;
+  final String parentEmail;
+  final String? parentPhone;
+  final String plan;
+  final String method;
+  final String status;
+  final DateTime? createdAt;
+
+  const EnrolmentRequest({
+    required this.requestId,
+    required this.studentName,
+    required this.accountEmail,
+    required this.grade,
+    required this.schoolBoard,
+    required this.school,
+    required this.parentName,
+    required this.parentEmail,
+    required this.parentPhone,
+    required this.plan,
+    required this.method,
+    required this.status,
+    this.createdAt,
+  });
+
+  factory EnrolmentRequest.fromJson(Map<String, dynamic> j) => EnrolmentRequest(
+        requestId: (j['request_id'] as num).toInt(),
+        studentName: j['student_name'] as String? ?? '',
+        accountEmail: j['account_email'] as String? ?? '',
+        grade: (j['grade'] as num?)?.toInt() ?? 0,
+        schoolBoard: j['school_board'] as String? ?? '',
+        school: j['school'] as String?,
+        parentName: j['parent_name'] as String? ?? '',
+        parentEmail: j['parent_email'] as String? ?? '',
+        parentPhone: j['parent_phone'] as String?,
+        plan: j['plan'] as String? ?? 'monthly',
+        method: j['method'] as String? ?? 'stripe',
+        status: j['status'] as String? ?? 'new',
+        createdAt: j['created_at'] == null
+            ? null
+            : DateTime.tryParse(j['created_at'] as String),
+      );
+}
+
+/// What a parent sees when they open the payment link. Deliberately thin:
+/// a first name, what is being bought, and how far along it is. A parent
+/// confirming a payment has no business reading the child's marks.
+class EnrolmentInvite {
+  final String studentFirst;
+  final String plan;
+  final String method;
+  final String status;
+
+  const EnrolmentInvite({
+    required this.studentFirst,
+    required this.plan,
+    required this.method,
+    required this.status,
+  });
+
+  factory EnrolmentInvite.fromJson(Map<String, dynamic> j) => EnrolmentInvite(
+        studentFirst: j['student_first'] as String? ?? 'Your child',
+        plan: j['plan'] as String? ?? 'monthly',
+        method: j['method'] as String? ?? 'stripe',
+        status: j['status'] as String? ?? 'new',
+      );
+}
+
+/// Tries to email a link, and says plainly whether it went.
+///
+/// The client sends only a KIND. It cannot name the recipient and cannot
+/// supply the token — the function derives both from the caller's JWT. That
+/// is what stops this being a way to send Astro-branded mail to anybody.
+///
+/// Returns the address it went to, or null when email is not set up. Null
+/// is a normal answer, not a failure: until RESEND_API_KEY exists the app
+/// shows the link for the student to pass on, and that path is the one
+/// that has actually been used.
+Future<String?> trySendLink(String kind) async {
+  try {
+    final res = await Supabase.instance.client.functions
+        .invoke('send-link', body: {'kind': kind});
+    final data = res.data;
+    if (data is Map && data['sent'] == true) return data['to'] as String?;
+    return null;
+  } catch (_) {
+    // Not deployed, not configured, rate limited, or offline. Every one of
+    // those means the same thing to the student: we could not send it, here
+    // is the link.
+    return null;
+  }
+}
+
+/// The Astro+ enrolment path: a student asks, an admin works the queue, a
+/// parent pays.
+///
+/// Every function here already existed in astro_sections.sql and had no
+/// caller. What was actually missing was a way to reach the pay_token —
+/// see enrolment_links.sql.
+class EnrolmentRepository {
+  final SupabaseClient _db = Supabase.instance.client;
+
+  Future<EnrolmentStatus?> mine() async {
+    final rows = await _db.rpc('my_enrolment_status') as List;
+    if (rows.isEmpty) return null;
+    return EnrolmentStatus.fromJson(Map<String, dynamic>.from(rows.first));
+  }
+
+  /// The link to hand to a parent, or null when there is no open request.
+  Future<String?> myLink() async {
+    final token = await _db.rpc('my_enrolment_link');
+    return token as String?;
+  }
+
+  /// Submits the form. A second submission replaces the first rather than
+  /// queueing behind it, so a parent never receives two payment links —
+  /// that rule is a unique index in the schema, not something this checks.
+  Future<int> request({
+    required String studentName,
+    required int grade,
+    required String schoolBoard,
+    required String parentName,
+    required String parentEmail,
+    required String plan,
+    required String method,
+    String? school,
+    String? parentPhone,
+  }) async {
+    final rows = await _db.rpc('request_enrolment', params: {
+      'p_student_name': studentName,
+      'p_grade': grade,
+      'p_school_board': schoolBoard,
+      'p_parent_name': parentName,
+      'p_parent_email': parentEmail,
+      'p_plan': plan,
+      'p_method': method,
+      'p_school': school,
+      'p_parent_phone': parentPhone,
+    }) as List;
+    return (Map<String, dynamic>.from(rows.first)['request_id'] as num).toInt();
+  }
+
+  Future<void> cancel() => _db.rpc('cancel_enrolment');
+
+  /// Callable without an account — the token is the authentication.
+  Future<EnrolmentInvite?> byToken(String token) async {
+    final rows =
+        await _db.rpc('enrolment_by_token', params: {'p_token': token}) as List;
+    if (rows.isEmpty) return null;
+    return EnrolmentInvite.fromJson(Map<String, dynamic>.from(rows.first));
+  }
+
+  // ---- admin ----
+
+  Future<List<EnrolmentRequest>> adminList({String? status}) async {
+    final rows = await _db
+        .rpc('admin_list_enrolments', params: {'p_status': status}) as List;
+    return rows
+        .map((e) => EnrolmentRequest.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  Future<String> adminLink(int requestId) async {
+    final token = await _db.rpc('admin_enrolment_link', params: {
+      'p_id': requestId,
+    });
+    return token as String;
+  }
+
+  Future<void> adminMark(int requestId, String status, {String? note}) =>
+      _db.rpc('admin_mark_enrolment', params: {
+        'p_id': requestId,
+        'p_status': status,
+        'p_note': note,
+      });
 }
 
 /// Age, guardian consent, export and deletion.
@@ -3502,6 +3743,13 @@ class AuthGate extends StatelessWidget {
       return GuardianConsentLandingScreen(token: consentToken);
     }
 
+    // And the Astro+ payment link. Same rule again: a parent arrives with a
+    // token and no account, and must not meet a sign-in screen.
+    final payToken = Uri.base.queryParameters['pay'];
+    if (payToken != null && payToken.isNotEmpty) {
+      return EnrolmentPaymentScreen(token: payToken);
+    }
+
     return StreamBuilder<AuthState>(
       stream: auth.onAuthStateChange,
       builder: (context, snapshot) {
@@ -4547,6 +4795,18 @@ class _HomePageState extends State<HomePage> {
               .showSnackBar(SnackBar(content: Text(message)));
           break;
 
+        case 'enrol':
+          final made = await showDialog<bool>(
+            context: context,
+            builder: (_) => AstroPlusEnrolmentSheet(
+              studentName: _profile?.displayName ?? '',
+              grade: _profile?.grade ?? 10,
+            ),
+          );
+          if (made != true || !mounted) return;
+          await _showEnrolmentLink();
+          break;
+
         case 'support':
           // A plain mailto. No form, no ticket system — a family with a
           // payment question reaches the person who runs the thing.
@@ -4562,6 +4822,86 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
+  }
+
+  /// Shows the link the parent has to open.
+  ///
+  /// The app cannot send email, so the student is handed the link to pass
+  /// on — the same decision the guardian consent screen makes, for the same
+  /// reason, and it is said out loud rather than dressed up as "sent!".
+  Future<void> _showEnrolmentLink() async {
+    // Try to send it properly first. If that works the student still sees
+    // the link, because "we emailed your mum" is not reassuring on its own
+    // and a link they can also send costs nothing.
+    final sentTo = await trySendLink('pay');
+
+    String? link;
+    try {
+      final token = await EnrolmentRepository().myLink();
+      if (token != null) {
+        link = Uri.base.resolve('?pay=$token').toString();
+      }
+    } catch (_) {
+      // Falls through to the no-link copy below.
+    }
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: kCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Send them this', style: TextStyle(fontSize: 18)),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                sentTo != null
+                    ? 'Sent to $sentTo. If it has not arrived in a few '
+                        'minutes, check the spam folder — or send them this '
+                        'link yourself.'
+                    : link == null
+                        ? 'Your request is in. We will be in touch with your '
+                            'parent or guardian at the address you gave.'
+                        : 'Your request is in. Send this link to your parent '
+                            'or guardian — opening it is all they have to do.',
+                style: TextStyle(fontSize: 13.5, height: 1.55, color: kInk),
+              ),
+              if (link != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+                  decoration: BoxDecoration(
+                    color: kTrack,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: SelectableText(
+                    link,
+                    style:
+                        TextStyle(fontSize: 12, height: 1.4, color: kInk),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          if (link != null)
+            TextButton(
+              onPressed: () =>
+                  Clipboard.setData(ClipboardData(text: link!)),
+              child: const Text('Copy the link'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _resetProgress() {
@@ -9192,7 +9532,9 @@ class _AdminHomeState extends State<AdminHome> {
   List<AdminTeacher> _teachers = [];
   List<AdminClassRow> _classes = [];
   List<EtransferClaim> _claims = [];
+  List<EnrolmentRequest> _enrolments = [];
   List<CourseOption> _courses = [];
+  final _enrol = EnrolmentRepository();
   bool _loading = true;
   String? _error;
   int _tab = 0;
@@ -9214,12 +9556,19 @@ class _AdminHomeState extends State<AdminHome> {
       final classes = await _admin.classes();
       final claims = await _admin.etransfers();
       final courses = await QuestionRepository().listCourses();
+      // Not fatal if this one fails: enrolment_links.sql may not be applied
+      // on an older database, and the rest of the panel still works.
+      var enrolments = <EnrolmentRequest>[];
+      try {
+        enrolments = await _enrol.adminList();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _students = students;
         _teachers = teachers;
         _classes = classes;
         _claims = claims;
+        _enrolments = enrolments;
         _courses = courses;
         _loading = false;
       });
@@ -9646,6 +9995,9 @@ class _AdminHomeState extends State<AdminHome> {
                     'Students (${_students.length})',
                     'Tutors (${_teachers.length})',
                     pending > 0 ? 'Payments · $pending' : 'Payments',
+                    _openEnrolments > 0
+                        ? 'Astro+ · $_openEnrolments'
+                        : 'Astro+',
                   ],
                   selected: _tab,
                   onSelect: (i) => setState(() => _tab = i),
@@ -9671,14 +10023,72 @@ class _AdminHomeState extends State<AdminHome> {
     );
   }
 
+  /// Requests still waiting on somebody. 'new' has not been contacted;
+  /// 'sent' has, and is waiting on the parent.
+  int get _openEnrolments =>
+      _enrolments.where((e) => e.status == 'new' || e.status == 'sent').length;
+
   Widget _buildTab() {
     switch (_tab) {
       case 0:
         return _buildStudents();
       case 1:
         return _buildTutors();
-      default:
+      case 2:
         return _buildPayments();
+      default:
+        return _buildEnrolments();
+    }
+  }
+
+  /// The Astro+ queue: who has asked, who to contact, and the link to send
+  /// them.
+  ///
+  /// The whole point of this tab is the link. Every function behind it has
+  /// existed and been tested since August; what was missing was any way to
+  /// get the pay_token out of the database, which is why there was no
+  /// interface. See enrolment_links.sql.
+  Widget _buildEnrolments() {
+    if (_enrolments.isEmpty) {
+      return const EmptyPrompt(
+          message: 'No Astro+ requests.\n\nThey appear here when a student '
+              'asks a parent to pay.');
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+      itemCount: _enrolments.length,
+      itemBuilder: (context, i) => _EnrolmentRow(
+        request: _enrolments[i],
+        onCopyLink: () => _copyEnrolmentLink(_enrolments[i]),
+        onMark: (status) => _markEnrolment(_enrolments[i], status),
+      ),
+    );
+  }
+
+  Future<void> _copyEnrolmentLink(EnrolmentRequest r) async {
+    try {
+      final token = await _enrol.adminLink(r.requestId);
+      final link = Uri.base.resolve('?pay=$token').toString();
+      await Clipboard.setData(ClipboardData(text: link));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Link copied. Send it to ${r.parentEmail}.'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
+  }
+
+  Future<void> _markEnrolment(EnrolmentRequest r, String status) async {
+    try {
+      await _enrol.adminMark(r.requestId, status);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -11596,6 +12006,581 @@ class _DifficultyRungs extends StatelessWidget {
 /// Two plans, two ways to pay, one door to a human. Every path is worded at
 /// the adult — the users are minors, minors cannot form contracts, and both
 /// the card page and the bank transfer belong to a parent.
+/// The Astro+ enrolment form: a student asks, a parent pays.
+///
+/// This is the other half of Astro+, and until now it was server-only. The
+/// existing plan tiles are the STUDENT paying, on their own card, right
+/// now. This is the case the product is actually for — a fourteen-year-old
+/// who wants Challenge unlocked and has no card, and a parent who does.
+///
+/// Nothing here charges anything. It records a request, and hands back a
+/// link the parent opens to pay.
+/// One request in the admin's Astro+ queue.
+class _EnrolmentRow extends StatelessWidget {
+  final EnrolmentRequest request;
+  final VoidCallback onCopyLink;
+  final ValueChanged<String> onMark;
+
+  const _EnrolmentRow({
+    required this.request,
+    required this.onCopyLink,
+    required this.onMark,
+  });
+
+  /// Status as a word and a colour. Reusing the band palette rather than
+  /// inventing a fourth colour language: grey is waiting, yellow is with
+  /// the parent, green is done, orange is off.
+  (String, Color) get _badge => switch (request.status) {
+        'paid' => ('Paid', bandColour(Band.green)),
+        'sent' => ('With the parent', bandColour(Band.yellow)),
+        'cancelled' => ('Cancelled', bandColour(Band.orange)),
+        _ => ('New', bandColour(Band.grey)),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final (word, colour) = _badge;
+    final open = request.status == 'new' || request.status == 'sent';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kLine),
+          boxShadow: kCardShadow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    request.studentName,
+                    style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: kInk),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: colour.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    word,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: bandTextColour(switch (request.status) {
+                          'paid' => Band.green,
+                          'sent' => Band.yellow,
+                          'cancelled' => Band.orange,
+                          _ => Band.grey,
+                        })),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Text(
+              'Grade ${request.grade} · ${request.schoolBoard}'
+              '${request.school == null ? '' : ' · ${request.school}'}',
+              style: TextStyle(fontSize: 12, color: kInkSoft),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '${request.parentName} · ${request.parentEmail}'
+              '${request.parentPhone == null ? '' : ' · ${request.parentPhone}'}',
+              style: TextStyle(fontSize: 12.5, height: 1.4, color: kInk),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '${request.plan == 'annual' ? 'Yearly' : 'Monthly'} · '
+              '${request.method == 'etransfer' ? 'e-transfer' : 'card'}',
+              style: TextStyle(fontSize: 12, color: kInkSoft),
+            ),
+            if (open) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 4,
+                children: [
+                  TextButton.icon(
+                    onPressed: onCopyLink,
+                    icon: const Icon(Icons.link_rounded, size: 16),
+                    label: const Text('Copy their link'),
+                    style: TextButton.styleFrom(foregroundColor: kAccentDeep),
+                  ),
+                  if (request.status == 'new')
+                    TextButton(
+                      onPressed: () => onMark('sent'),
+                      child: const Text('Mark as sent'),
+                    ),
+                  TextButton(
+                    onPressed: () => onMark('paid'),
+                    child: const Text('Mark as paid'),
+                  ),
+                  TextButton(
+                    onPressed: () => onMark('cancelled'),
+                    style: TextButton.styleFrom(foregroundColor: kInkSoft),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AstroPlusEnrolmentSheet extends StatefulWidget {
+  final String studentName;
+  final int grade;
+
+  const AstroPlusEnrolmentSheet({
+    super.key,
+    required this.studentName,
+    required this.grade,
+  });
+
+  @override
+  State<AstroPlusEnrolmentSheet> createState() =>
+      _AstroPlusEnrolmentSheetState();
+}
+
+class _AstroPlusEnrolmentSheetState extends State<AstroPlusEnrolmentSheet> {
+  final _repo = EnrolmentRepository();
+  final _board = TextEditingController();
+  final _school = TextEditingController();
+  final _parentName = TextEditingController();
+  final _parentEmail = TextEditingController();
+  final _parentPhone = TextEditingController();
+
+  String _plan = 'monthly';
+  String _method = 'stripe';
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _board.dispose();
+    _school.dispose();
+    _parentName.dispose();
+    _parentEmail.dispose();
+    _parentPhone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final board = _board.text.trim();
+    final parentName = _parentName.text.trim();
+    final parentEmail = _parentEmail.text.trim();
+
+    // Checked here so the student is told which field, rather than being
+    // handed whatever Postgres says about a not-null constraint.
+    if (board.isEmpty) {
+      setState(() => _error = 'Which school board are you in?');
+      return;
+    }
+    if (parentName.length < 2) {
+      setState(() => _error = 'Your parent or guardian\'s name, please.');
+      return;
+    }
+    if (!parentEmail.contains('@') || parentEmail.length < 5) {
+      setState(() => _error = 'That does not look like an email address.');
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _repo.request(
+        studentName: widget.studentName,
+        grade: widget.grade,
+        schoolBoard: board,
+        school: _school.text.trim().isEmpty ? null : _school.text.trim(),
+        parentName: parentName,
+        parentEmail: parentEmail,
+        parentPhone:
+            _parentPhone.text.trim().isEmpty ? null : _parentPhone.text.trim(),
+        plan: _plan,
+        method: _method,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = friendlyError(e);
+        _busy = false;
+      });
+    }
+  }
+
+  Widget _choice(String value, String group, String label, String hint,
+      ValueChanged<String> onPick) {
+    final on = value == group;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: on ? kWash : kCard,
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(11),
+          onTap: () => onPick(value),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: on ? kAccent : kLine, width: on ? 2 : 1),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                    on
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_off_rounded,
+                    size: 18,
+                    color: on ? kAccent : kInkSoft),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label,
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: kInk)),
+                      Text(hint,
+                          style: TextStyle(fontSize: 12, color: kInkSoft)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: kCard,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Ask a parent to pay', style: TextStyle(fontSize: 18)),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'We will make a link for them. Nothing is charged until they '
+                'open it and choose to pay.',
+                style: TextStyle(fontSize: 13.5, height: 1.5, color: kInkSoft),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _board,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'School board',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _school,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'School (optional)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text('Your parent or guardian',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: kInkSoft)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _parentName,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Their name',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _parentEmail,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Their email',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _parentPhone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Their phone (optional)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text('Plan',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: kInkSoft)),
+              const SizedBox(height: 8),
+              _choice('monthly', _plan, 'Monthly — \$10 CAD',
+                  'Cancel any time.', (v) => setState(() => _plan = v)),
+              _choice('annual', _plan, 'Yearly — \$100 CAD',
+                  'Two months free.', (v) => setState(() => _plan = v)),
+              const SizedBox(height: 10),
+              Text('How they would like to pay',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: kInkSoft)),
+              const SizedBox(height: 8),
+              _choice('stripe', _method, 'Card', 'Handled by Stripe.',
+                  (v) => setState(() => _method = v)),
+              _choice('etransfer', _method, 'Interac e-transfer',
+                  'From their own banking app.',
+                  (v) => setState(() => _method = v)),
+              if (_error != null) ...[
+                const SizedBox(height: 14),
+                _Banner(message: _error!, colour: kWrong),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Not now'),
+        ),
+        TextButton(
+          onPressed: _busy ? null : _submit,
+          child: Text(_busy ? 'Sending…' : 'Make the link'),
+        ),
+      ],
+    );
+  }
+}
+
+/// The page a parent lands on. No account, no sign-in — the token in the
+/// URL is the whole of their visit, exactly as it is for a shared report
+/// and for guardian consent.
+class EnrolmentPaymentScreen extends StatefulWidget {
+  final String token;
+
+  const EnrolmentPaymentScreen({super.key, required this.token});
+
+  @override
+  State<EnrolmentPaymentScreen> createState() => _EnrolmentPaymentScreenState();
+}
+
+class _EnrolmentPaymentScreenState extends State<EnrolmentPaymentScreen> {
+  final _repo = EnrolmentRepository();
+  EnrolmentInvite? _invite;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final invite = await _repo.byToken(widget.token);
+      if (!mounted) return;
+      setState(() {
+        _invite = invite;
+        // Vague on purpose. An unknown token must not be distinguishable
+        // from a cancelled one, or the page becomes a way to test tokens.
+        _error = invite == null ? 'This link is not valid any more.' : null;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'This link is not valid any more.';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final invite = _invite;
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: _loading
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 90),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 32),
+                        const Center(child: BrandBadge(size: 56)),
+                        const SizedBox(height: 20),
+                        Text(
+                          _error != null ? 'Sorry' : 'Astro+ for ${invite!.studentFirst}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: kSerif,
+                            fontFamilyFallback: kSerifFallback,
+                            fontSize: 25,
+                            fontWeight: FontWeight.w600,
+                            color: kInk,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_error != null)
+                          Text(_error!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 14.5,
+                                  height: 1.6,
+                                  color: kInkSoft))
+                        else ...[
+                          Text(
+                            invite!.status == 'paid'
+                                ? 'This is already paid for. There is nothing '
+                                    'left to do, and you will not be charged '
+                                    'again by opening this link.'
+                                : 'Astro+ unlocks the Challenge and Advanced '
+                                    'levels, and a tutor who reviews their '
+                                    'work. Easy and Medium are free forever, '
+                                    'and every medal they have earned stays '
+                                    'theirs either way.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 14.5, height: 1.6, color: kInkSoft),
+                          ),
+                          const SizedBox(height: 20),
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 15),
+                            decoration: BoxDecoration(
+                              color: kTrack,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  invite.plan == 'annual'
+                                      ? 'Yearly — \$100 CAD'
+                                      : 'Monthly — \$10 CAD',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: kInk),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  invite.method == 'etransfer'
+                                      ? 'By Interac e-transfer'
+                                      : 'By card',
+                                  style: TextStyle(
+                                      fontSize: 13, color: kInkSoft),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          if (invite.status != 'paid')
+                            // No checkout button here on purpose. Starting a
+                            // Stripe session needs a signed-in student id,
+                            // and this page has no session — so the honest
+                            // thing is to tell the parent how it actually
+                            // works today rather than show a button that
+                            // cannot complete.
+                            Container(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 14, 16, 15),
+                              decoration: BoxDecoration(
+                                color: kWarmTint,
+                                borderRadius: BorderRadius.circular(11),
+                                border: Border.all(
+                                    color: kHint.withValues(alpha: 0.35)),
+                              ),
+                              child: Text(
+                                invite.method == 'etransfer'
+                                    ? 'Send the amount above by Interac '
+                                        'e-transfer to stemlabs.ca@gmail.com, '
+                                        'putting ${invite.studentFirst}\'s name '
+                                        'in the message. We confirm it by hand, '
+                                        'usually within a day.'
+                                    : 'We will email you a card payment link '
+                                        'from stemlabs.ca@gmail.com. If you '
+                                        'would rather not wait, reply to that '
+                                        'address and we will call you.',
+                                style: TextStyle(
+                                    fontSize: 13.5,
+                                    height: 1.55,
+                                    color: kInk),
+                              ),
+                            ),
+                        ],
+                        const SizedBox(height: 20),
+                        TextButton(
+                          onPressed: () => launchUrl(
+                            Uri.parse('mailto:stemlabs.ca@gmail.com'
+                                '?subject=Astro%2B'),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                          child: const Text('Email us a question'),
+                        ),
+                        const SizedBox(height: 8),
+                        const LegalLinks(),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class AstroPlusDialog extends StatelessWidget {
   const AstroPlusDialog({super.key});
 
@@ -11646,6 +12631,15 @@ class AstroPlusDialog extends StatelessWidget {
               title: 'Interac e-Transfer',
               subtitle: 'Send it from your own banking app instead.',
               onTap: () => Navigator.of(context).pop('etransfer'),
+            ),
+            const SizedBox(height: 8),
+            // The case this product is actually for: a fourteen-year-old
+            // with no card, and a parent who has one. The three tiles above
+            // all assume the person tapping them is the payer.
+            _PlanTile(
+              title: 'Ask a parent or guardian',
+              subtitle: 'We make a link for them. Nothing is charged now.',
+              onTap: () => Navigator.of(context).pop('enrol'),
             ),
           ],
         ),
@@ -15792,6 +16786,30 @@ class ReportData {
 
   bool get hasWork => questionsSeen > 0;
 
+  /// The same report with best-test scores attached.
+  ///
+  /// They arrive from my_percentages rather than from report_payload, and
+  /// that is deliberate: report_payload is a large, load-bearing function
+  /// covered by 212 checks, and my_percentages already computes exactly
+  /// this and is covered by its own. Merging two results in the app is
+  /// cheaper and safer than reshaping one of them in SQL.
+  ReportData withTestScores(Map<String, int> scores) => ReportData(
+        firstName: firstName,
+        grade: grade,
+        course: course,
+        questionsSeen: questionsSeen,
+        totalTaps: totalTaps,
+        daysPractised: daysPractised,
+        firstTryRate: firstTryRate,
+        lastActive: lastActive,
+        gold: gold,
+        silver: silver,
+        bronze: bronze,
+        units: units,
+        weakTopics: weakTopics,
+        testScores: scores,
+      );
+
   factory ReportData.fromJson(Map<String, dynamic> j) {
     final medals = Map<String, dynamic>.from(j['medals'] ?? const {});
     return ReportData(
@@ -15825,7 +16843,31 @@ class ReportRepository {
 
   Future<ReportData> mine() async {
     final row = await _db.rpc('my_report');
-    return ReportData.fromJson(Map<String, dynamic>.from(row as Map));
+    final data = ReportData.fromJson(Map<String, dynamic>.from(row as Map));
+    return data.withTestScores(await _testScores());
+  }
+
+  /// Best test score per subtopic tag, from my_percentages.
+  ///
+  /// Keyed by TAG, which is what the topic map and the tree look up. A
+  /// subtopic with no finished test simply misses the lookup and falls
+  /// back to its first-try rate, which is why this can fail quietly: an
+  /// empty map and an unreachable function produce the same, correct,
+  /// screen.
+  Future<Map<String, int>> _testScores() async {
+    try {
+      final rows = await _db.rpc('my_percentages') as List;
+      final out = <String, int>{};
+      for (final raw in rows) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final tag = row['tag'] as String?;
+        final pct = (row['subtopic_pct'] as num?)?.toInt();
+        if (tag != null && pct != null) out[tag] = pct;
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
   }
 
   /// Reads a shared report by token. Callable without an account — the token

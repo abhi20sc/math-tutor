@@ -217,3 +217,67 @@ begin
   raise notice '';
   raise notice 'Safeguarding checks passed.';
 end $$;
+
+
+-- ===========================================================================
+-- The Astro+ enrolment link — the value the flow was missing
+-- ===========================================================================
+--
+-- astro_sections.sql built and tested the whole enrolment path, but nothing
+-- ever returned pay_token, so no interface could be written against it.
+-- enrolment_links.sql adds the two functions that hand it out. These are the
+-- checks that they hand it to the right people and refuse the wrong ones.
+do $$
+declare
+  v_s uuid; v_a uuid; v_req bigint; v_tok uuid; v_tok2 uuid; r record;
+begin
+  delete from auth.users where email in ('el_s@sg.test', 'el_a@sg.test');
+  insert into auth.users (email) values ('el_s@sg.test') returning id into v_s;
+  insert into auth.users (email) values ('el_a@sg.test') returning id into v_a;
+  insert into profiles (id, email, full_name, grade, course) values
+    (v_s, 'el_s@sg.test', 'Link Student', 10, 'MPM2D'),
+    (v_a, 'el_a@sg.test', 'Link Admin',   12, 'MPM2D');
+  insert into staff_roles (user_id, role) values (v_a, 'admin')
+    on conflict do nothing;
+
+  perform set_config('test.uid', v_s::text, false);
+
+  perform sg_ok('K1  no request means no link', my_enrolment_link() is null);
+
+  select request_id into v_req from request_enrolment(
+    p_student_name => 'Link Student', p_grade => 10,
+    p_school_board => 'TDSB', p_parent_name => 'A Parent',
+    p_parent_email => 'parent@sg.test', p_plan => 'monthly',
+    p_method => 'stripe');
+
+  select my_enrolment_link() into v_tok;
+  perform sg_ok('K2  the student can reach their own link', v_tok is not null);
+
+  select * into r from enrolment_by_token(v_tok);
+  perform sg_ok('K3  and it resolves for a signed-out parent',
+    r.student_first = 'Link' and r.plan = 'monthly');
+
+  perform sg_raises('K4  a student cannot use the admin route',
+    format('select admin_enrolment_link(%s)', v_req));
+
+  perform set_config('test.uid', v_a::text, false);
+  select admin_enrolment_link(v_req) into v_tok2;
+  perform sg_ok('K5  the admin gets the same link', v_tok2 = v_tok);
+
+  perform sg_raises('K6  and is refused an id that does not exist',
+    'select admin_enrolment_link(999999)');
+
+  perform set_config('test.uid', v_s::text, false);
+  perform cancel_enrolment();
+  perform sg_ok('K7  cancelling retires the link',
+    my_enrolment_link() is null);
+
+  perform sg_ok('K8  anon cannot reach either link function',
+    not has_function_privilege('anon', 'my_enrolment_link()', 'execute')
+    and not has_function_privilege('anon', 'admin_enrolment_link(bigint)',
+                                   'execute'));
+
+  delete from auth.users where email in ('el_s@sg.test', 'el_a@sg.test');
+  raise notice '';
+  raise notice 'Enrolment link checks passed.';
+end $$;
