@@ -443,6 +443,40 @@ $$;
 -- one row per bucket. At this size the boundary case is somebody getting
 -- eleven tries instead of ten, which is not the attack this stops.
 
+-- The live project already has a rate_limit_hits: no primary key, never
+-- written to, created by no file in this repository. `create table if not
+-- exists` would find it, leave it exactly as it is, and report success —
+-- and then note_rate_limit's upsert fails with "no unique or exclusion
+-- constraint matching the ON CONFLICT specification" on every call.
+--
+-- Because the app's rate-limit check fails open, that error would be
+-- swallowed and the result would be no rate limiting at all, with nothing
+-- on screen or in a log to say so. Checked, not assumed: the old shape
+-- really does survive, and the upsert really does fail.
+--
+-- So the old one is dropped rather than adopted. It is safe: nothing has
+-- ever written to it, and this only fires when there is no primary key,
+-- which is true of the leftover and false of the table below.
+-- to_regclass on BOTH sides, not a ::regclass cast. The cast throws
+-- outright when the relation does not exist — it is resolved before the
+-- surrounding `and` can short-circuit — so the guard that was supposed to
+-- make this safe on a fresh database was the thing that broke it there.
+-- Found by running this file into an empty one, which is the only way that
+-- class of mistake shows up.
+do $$
+declare
+  v_tbl oid := to_regclass('public.rate_limit_hits');
+begin
+  if v_tbl is not null
+     and not exists (select 1 from pg_constraint
+                     where conrelid = v_tbl and contype = 'p')
+  then
+    raise notice 'dropping the old keyless rate_limit_hits (% rows)',
+      (select count(*) from rate_limit_hits);
+    drop table rate_limit_hits;
+  end if;
+end $$;
+
 create table if not exists rate_limit_hits (
   bucket      text        not null,
   window_start timestamptz not null,

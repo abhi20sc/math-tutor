@@ -1,10 +1,13 @@
-# Astro Math Assist
+# Astro STEM Labs — Maths
 
 Ontario high-school maths practice that shows a student *what they got wrong
 and why*. Grades 9 to 12, six courses, 1,600 questions and 219 lessons, with a
 progress report a tutor or a parent can read.
 
 Flutter Web on the front, Supabase Postgres on the back.
+
+One subject inside Astro STEM Labs. Physics and Tech appear in the app as
+named-but-closed options; nothing is stubbed in behind them.
 
 ---
 
@@ -57,6 +60,12 @@ supabase/
   migrations/
     astro_math_assist_setup.sql   Schema, policies, functions. Run this first.
     astro_sections.sql            Learn / Improve / Test / preferences.
+    test_review_answers.sql       The end-of-test review, answers included.
+    learn_journey.sql             The Learn path: read, prove it, unlock.
+    my_progress.sql               Per-unit progress, reduced server-side.
+    student_safeguarding.sql      Age gate, guardian consent, export, delete,
+                                  rate limiting.
+    indexes_and_policy_perf.sql   Indexes Postgres does not create for you.
     questions/                    Source of truth: 40 per-unit files + figures.
     lessons/                      Source of truth: 6 per-course files.
     bundles/                      Generated. Same content, fewer pastes.
@@ -118,6 +127,9 @@ From an empty Supabase project, the short version:
 2. `bundles/questions_all.sql` — 1,600 questions and 60 figures
 3. `astro_sections.sql` — the Learn / Improve / Test tables and functions
 4. the six `lessons/*.sql` — 219 lessons
+5. `test_review_answers.sql`, `learn_journey.sql`, `my_progress.sql`,
+   `student_safeguarding.sql`, `indexes_and_policy_perf.sql` — in that order,
+   any time after 3
 
 **One ordering rule that is easy to miss.** Inside every question file the
 figure statements come last, and they have to. Each unit block opens with
@@ -212,6 +224,7 @@ Question authoring rules live in `docs/AUTHORING_GUIDE.md`; lesson format in
 | `tests/test_ama.sql` | 212 checks | a scratch database — **never the live one**, it creates fixture users |
 | `tests/test_sections.sql` | 70 checks | a *different* scratch database from the above, or the same one before it |
 | `tests/test_rpc_names.sql` | 12 checks | calls every RPC by named argument |
+| `tests/test_safeguarding.sql` | 41 checks | the age gate, guardian consent, export, deletion and rate limiting — every refusal, demonstrated |
 | `test/widget_test.dart` | 14 tests | `flutter test` |
 
 `test_rpc_names.sql` earns its place. PostgREST resolves functions by their
@@ -219,31 +232,62 @@ Question authoring rules live in `docs/AUTHORING_GUIDE.md`; lesson format in
 at runtime while `flutter analyze` stays perfectly happy. That suite is the only
 thing that catches it.
 
-All four were run on 24 August 2026 against a scratch Postgres built by route B
-above, from this repository, with nothing else in it: **212, 66, 12 and 14, all
-passing**, `flutter analyze` clean. The scratch database came out at 1,600
-questions, 60 figures, 219 lessons, six courses, and zero subtopics without a
-lesson.
+All five were run on 27 August 2026 against a scratch Postgres built from this
+repository alone, every migration applied in order and nothing else in it:
+**212, 70, 12, 41 and 39, all passing**, `flutter analyze` clean.
 
 ---
 
 ## Where it stands
 
-Live in production: the schema, 1,600 questions, 219 lessons, 92 functions, and
-real student attempt history.
+Live in production: the schema, 1,600 questions, 219 lessons, 92 functions,
+and real student attempt history.
 
-**Not yet deployed:** the August build — the four-section loop, the tree view,
-dark mode and the branding are all in this repository but the hosted site still
-serves an older build. Deploying is the next step, not more features.
+**Not yet deployed.** Everything below is in this repository and none of it is
+in front of a student. That is the single biggest thing outstanding, and it is
+a deploy rather than a feature:
 
-Still open:
+- The Astro STEM Labs brand, and a dark theme whose colours are actually
+  derived rather than guessed
+- Learn / Quiz / Improve / Test as one loop
+- The mindmap on the main screen, with Reset view, beside the classroom view
+- The end-of-test review, answers included, on a finished paper only
+- The Learn path: read it, prove it, and the next one opens
+- The age gate, guardian consent, account deletion, data export and rate
+  limiting
 
-- Link the privacy policy and terms from inside the app
-- Put the brand mark on the sign-in screen
-- Wire `test_scores` into `report_payload` so the topic map shows best test
-  score rather than first-try rate
-- The Astro+ enrolment form and the Edge Function that emails parents
-- Mobile layout pass
+**Before it can be deployed** — none of these are code, and all of them are
+in `docs/LAUNCH_CHECKLIST.md`:
+
+- Turn Confirm email back ON, and leaked-password protection with it
+- Nothing to do about the old keyless `rate_limit_hits` on the live project:
+  `student_safeguarding.sql` detects and replaces it. Worth knowing it was
+  there, because rate limiting fails open and would have been silently absent
+- Stripe live keys, live prices and a live webhook secret; redeploy both
+  edge functions
+- Set `SITE_URL` on `create-checkout` — CORS is locked to it now, and an
+  unset value fails closed
+
+Still open, and honestly still open:
+
+- The Astro+ enrolment flow. Six functions exist in `astro_sections.sql`
+  with no interface: `request_enrolment`, `my_enrolment_status`,
+  `cancel_enrolment`, `enrolment_by_token`, `admin_list_enrolments`,
+  `admin_mark_enrolment`. The server half is built and tested; the client
+  half is not written.
+- Best test score on the topic map. `my_percentages`, `my_unit_percentages`
+  and `my_subtopics` are written and unused for the same reason.
+- `lib/main.dart` is one file at 16,000 lines. Splitting it is the next
+  structural job, and it is also the only real lever left on the payload:
+  1,056 KB gzipped, against a sensible budget of about 200 KB, and deferred
+  loading needs module boundaries to defer.
+- Sending the guardian consent link by email. Today the app hands the
+  student the link to pass on, because there is no email function in this
+  project. That is honest rather than finished.
+- Nothing schedules `purge_rate_limits`. The counters are small and the
+  table is harmless, but the tidy-up is a manual one-liner until something
+  runs it.
+- Mobile layout pass, and a keyboard route through the mindmap.
 
 `docs/PROJECT_STATE.md` is the honest, current account of all of it.
 

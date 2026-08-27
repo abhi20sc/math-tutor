@@ -44,12 +44,20 @@
 //   even by editing the JavaScript, because the database refuses.
 //
 // KNOWN LIMITS
-//   correct_index is sent to the browser, so it is readable in the network
-//   tab. When that matters, the fix is a Postgres function called via .rpc()
-//   that grades on the server instead.
+//   This file is 16,000 lines. That was the right call while the shape of
+//   the app was unknown and it is a liability now. Splitting it is the next
+//   structural job, and it should be split along boundaries the code has
+//   revealed rather than guessed ones.
 //
-//   No password reset flow yet. Supabase supports it through
-//   auth.resetPasswordForEmail; it needs a screen building.
+//   Two limits that USED to be listed here are gone, and are recorded
+//   because the repository is public and a reader finding them in an old
+//   copy should know they were closed:
+//
+//     * correct_index is no longer sent to the browser. list_questions
+//       returns prompts and option text only; grading happens inside
+//       submit_answer. Block B of tests/test_ama.sql is twelve checks that
+//       it stays that way.
+//     * password reset exists. See ResetPasswordScreen.
 
 // JsonEncoder, for the data export.
 import 'dart:convert';
@@ -5809,6 +5817,13 @@ class _HomePageState extends State<HomePage> {
             label: const Text('Sign out'),
           ),
         ),
+        // Reachable from INSIDE the app, not only from the sign-in screen.
+        // A student who made an account a year ago has not seen that screen
+        // since, and the policy they are governed by should not be behind
+        // signing out.
+        const SizedBox(height: 8),
+        const LegalLinks(),
+        const SizedBox(height: 12),
       ],
     );
   }

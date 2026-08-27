@@ -1,120 +1,193 @@
-# LAUNCH CHECKLIST — Astro Math Assist
+# Launch checklist — Astro STEM Labs
 
-Produced from a two-track pre-launch audit: a security review (OWASP/ASVS
-lens, adversarial trace of grants, definer functions, both edge functions
-and the e-transfer state machine) and a usability/design review of the whole
-app. Findings were fixed where fixable in code; what remains is listed
-honestly below.
+Everything that has to be true before a real student uses this, in the order
+it has to happen. Current as of 27 August 2026.
 
----
+Nothing on this page is code. All of it is yours to do, because all of it
+needs a password, a card, or a decision that is not mine to make.
 
-## Fixed during the audit — deploy carries these
-
-The two that mattered most:
-
-1. **The reporting views bypassed RLS.** `my_weekly_progress` and
-   `misconception_counts` ran with their owner's privileges, so any
-   signed-in student could read every student's weekly rows — and
-   `misconception_counts` listed which options are wrong per question,
-   an answer-elimination oracle that quietly defeated the entire
-   answers-never-reach-the-browser design. Both views are now
-   `security_invoker` and covered by tests F1a/F1b.
-2. **Opening the Astro+ menu destroyed an e-transfer subscription.**
-   `create-checkout` remembered a new Stripe customer via an upsert that
-   wrote `status='none', period_end=null` — overwriting a family's paid
-   `manual` grant on one tap. It now calls `set_stripe_customer`, which
-   touches nothing but the customer id. Tests F3a–F3c.
-
-The rest: students can no longer change their own grade through the
-profiles table (trigger; the tutor owns grade — test F2a, name stays
-editable F2b); the webhook only grants on `payment_status = 'paid'` and
-treats a Stripe API error as an error instead of defaulting to premium;
-`has_premium()` is the single stated definition of premium and now lists
-`'manual'`; password floor raised 6 → 8.
-
-And on the product side: the mindmap no longer traps page scrolling (it
-sleeps until tapped — "Tap to explore the map"); a Wi-Fi blip mid-answer
-shows a snackbar instead of ejecting the student to the level picker; the
-report legend no longer describes the retired amber/red scheme; band
-percentages carry the band word in a contrast-safe colour, so meaning never
-lives in colour alone; the e-transfer plan tiles show selection the same
-way answer options do; admin dates read "9 Mar 2026", never "3/9/2026";
-the rail's Topics link actually returns to the overview; question figures
-reserve their space, announce a failed load, and carry a semantic label;
-grading shows a progress line; pending invitations appear on the Profile
-pane too; the rail shows the in-N-classes disclosure.
+Tick order matters in section 1. Sections 2 and 3 can be done in any order,
+but all of section 1 has to be done first.
 
 ---
 
-## Before real money moves
+## 1. The database, in this order
 
-- [ ] Stripe: swap `sk_test_` → `sk_live_`, create the two live prices
-      (monthly $10, annual $100 CAD), set `STRIPE_PRICE_ID_MONTHLY` and
-      `STRIPE_PRICE_ID_ANNUAL`, add the live webhook endpoint and its
-      `STRIPE_WEBHOOK_SECRET`.
-- [ ] **Redeploy BOTH edge functions — both changed in this pass:**
-      `supabase functions deploy create-checkout` and
-      `supabase functions deploy stripe-webhook --no-verify-jwt`.
-- [ ] Test the full loop once in live mode with a real card and refund it.
-- [ ] Interac: turn **auto-deposit ON** for stemlabs.ca@gmail.com so no
-      security answers travel by text message.
-- [ ] Decide who checks the bank inbox and how often — the e-transfer
-      promise in the app is "usually within a day", made by you, not code.
+The live project is `frkswzowskeqmgdrrwab`. Everything here is the Supabase
+SQL editor unless it says otherwise.
 
-## Before real students
+### 1.1 The old rate-limit table — handled, but know about it
 
-- [ ] Supabase → Authentication → Email → turn **Confirm email** back ON.
-- [ ] Supabase → Authentication → set minimum password length to 8 there
-      too (the app enforces 8, the server setting should agree).
-- [ ] Add the Netlify URL to the Auth allowed redirect list, then send
-      yourself a reset email and tap it **on a phone** — this path has
-      never been verified end to end.
-- [ ] The admin account is the keys to every student's data: unique strong
-      password, and turn on MFA for it in Supabase if available.
-- [ ] Run order on any redeploy: setup → questions → **figures** →
-      re-grant admin → build → drag → hard-reload. After setup, every user
-      signs in once before they reappear anywhere.
-- [ ] On a real phone: the report mindmap (tap-to-wake, expand a unit,
-      drag a node), a share link in a private window, and one full
-      question with a figure (Trigonometry Medium has them).
+Nothing to do. This is here because it is the one upgrade hazard on the live
+project and you should know it exists rather than trust that it does not.
 
-## Known and accepted, watch at scale
+There is already a `rate_limit_hits` on the live database. It has no primary
+key, nothing has ever written to it, and no file in this repository created
+it — a leftover from a feature that was never built.
 
-- `invite_student` reveals whether an email has an account (teacher-only
-  audience — REVIEW.md #7).
-- `fetchProgress` downloads every attempt row to draw five numbers — the
-  first thing to rewrite when classes grow (REVIEW.md #5).
-- Database access equals full access; the service key never leaves
-  Supabase secrets (REVIEW.md #8).
-- Direct enrolment (`add_student_to_class` / admin assign) skips the
-  consent step by design for a private tutor; a school deployment makes
-  invitation the only path. Documented on the function.
+`create table if not exists` would have found it, left it exactly as it was,
+and reported success. Then every `note_rate_limit` call would fail with *no
+unique or exclusion constraint matching the ON CONFLICT specification* — and
+because the app's rate-limit check fails open, that error would be swallowed.
+You would have had no rate limiting and no sign of it.
 
-## Open items, not blocking a family-scale launch
+`student_safeguarding.sql` now detects the old shape and drops it first. It
+prints `dropping the old keyless rate_limit_hits (0 rows)` when it does.
+Safe, because nothing has ever written to it.
 
-- **Keyboard and screen-reader access to the mindmap** — nodes are
-  pointer-only. The unit bars carry the same data in text; subtopic bands
-  currently exist only on the map. An accessible fallback list (expandable
-  rows under each unit bar) is the right future fix.
-- Focus states on answer options and rail links use Material's default
-  overlay, not the crafted hover treatment; the back arrow in the quiz
-  header is under the 44px comfortable hit target.
-- "My report" opens as a pushed screen while Topics/Profile swap the pane;
-  consistent would be report-in-pane.
-- Clicking a different topic in the rail mid-question switches immediately
-  and discards the open question — consider a confirm.
-- The 640–980px band is correct but plain (stacked layout with side
-  margins); an intermediate breakpoint would polish it.
-- kHint amber as small text sits just under AA contrast; darken if it ever
-  carries essential meaning.
-- Still **zero Dart tests**. The SQL suite (103 checks) covers the server;
-  the client's answer-handling state machine is the first thing worth a
-  widget test.
+### 1.2 Run the new migrations
 
-## The standing content duty
+In this order. Each is safe to re-run; none of them touches a question, a
+lesson, or a student's history.
 
-Every new question batch: run the SQL suite (its REVIEW section prints any
-feedback that states the answer), and hold figures to the same rule — a
-diagram that can be measured for the answer is a leaked answer. The
-university-student review spreadsheet covers difficulty and distractor
-quality for the current 240.
+- [ ] `supabase/migrations/test_review_answers.sql`
+- [ ] `supabase/migrations/learn_journey.sql`
+- [ ] `supabase/migrations/my_progress.sql`
+- [ ] `supabase/migrations/student_safeguarding.sql`
+- [ ] `supabase/migrations/indexes_and_policy_perf.sql`
+
+**Do NOT re-run `astro_math_assist_setup.sql` or any question file.** They
+are already applied. Re-running the setup would drop and rebuild `questions`
+for no reason.
+
+### 1.3 Check it took
+
+- [ ] ```sql
+      select count(*) from questions;                    -- 1600
+      select count(*) from lessons;                      -- 219
+      select * from my_consent_status();                 -- one row
+      select note_rate_limit('launch-check', 2, '1 minute');  -- t, t, then f
+      ```
+
+- [ ] Confirm the eight existing accounts are not locked out:
+      ```sql
+      select count(*) from profiles where date_of_birth is null;   -- 8
+      select count(*) from profiles p where consent_required(p.id); -- 0
+      ```
+      Null birth date means "not blocked", deliberately — see the note in
+      `student_safeguarding.sql`. If the second query returns anything other
+      than 0, stop and read that note before going further.
+
+---
+
+## 2. Supabase settings
+
+These are in the dashboard, not in SQL, which is why no migration can do
+them and why they are the ones most often forgotten.
+
+- [ ] **Authentication → Sign In / Providers → Email → Confirm email: ON.**
+      It was turned off for testing. Leaving it off means anybody can create
+      an account on somebody else's address.
+- [ ] **Authentication → leaked-password protection: ON.** Supabase's own
+      advisor has been flagging this the whole time.
+- [ ] **Authentication → minimum password length: 8.** The app enforces 8;
+      the server should agree rather than being two rules that can drift.
+- [ ] **Authentication → URL Configuration → Redirect URLs:** add the
+      Netlify URL. Without it the password-reset link goes nowhere.
+- [ ] **The admin account:** a unique strong password, and MFA if Supabase
+      offers it on your plan. That account can read every student's work.
+
+---
+
+## 3. Stripe, before any real money
+
+- [ ] Swap `sk_test_` for `sk_live_`
+- [ ] Create the two live prices — monthly $10, annual $100 CAD
+- [ ] Set `STRIPE_PRICE_ID_MONTHLY` and `STRIPE_PRICE_ID_ANNUAL`
+- [ ] Add the live webhook endpoint and set `STRIPE_WEBHOOK_SECRET`
+- [ ] **Set `SITE_URL`** to the real Netlify origin, with no trailing slash.
+      This is new and it is not optional any more: CORS on `create-checkout`
+      is locked to it. Unset, it falls back to a placeholder that matches no
+      real origin, and the browser will refuse every response — which is the
+      correct failure, but it is still a failure.
+- [ ] Redeploy **both** functions:
+      ```bash
+      supabase functions deploy create-checkout
+      supabase functions deploy stripe-webhook --no-verify-jwt
+      ```
+      `--no-verify-jwt` on the webhook is required: Stripe is not a signed-in
+      user. The signature check inside the function is what replaces it.
+- [ ] Put one real card through the whole loop, then refund it
+- [ ] Interac: turn **auto-deposit ON** for stemlabs.ca@gmail.com, so no
+      security answers travel by text message
+- [ ] Decide who reads the bank inbox and how often. The app promises
+      "usually within a day" — that promise is made by a person, not by code
+
+---
+
+## 4. Build and deploy
+
+```bash
+flutter pub get
+flutter analyze          # expect zero issues
+flutter test             # expect 39 passing
+flutter build web --release
+# then drag build/web onto Netlify
+```
+
+- [ ] Confirm `build/web` contains `_headers` and `_redirects`. They live in
+      `web/` and are copied by the build. Without `_redirects` every shared
+      link and every reload 404s; without `_headers` there are no security
+      headers at all.
+- [ ] Confirm `web/figures/` shipped — 376 PNGs. Missing figures make
+      questions reference invisible diagrams, with no error.
+- [ ] After deploying, **close the tab completely and reopen it.** Flutter's
+      service worker serves the old app for a load or two otherwise, and
+      "I deployed but nothing changed" is almost always this.
+
+Do not use `--wasm`. It was measured: 1,156 KB gzipped against 1,056 KB for
+the normal build. It is worse.
+
+---
+
+## 5. On a real phone, signed in as a real student
+
+The things that have never been tested end to end on hardware.
+
+- [ ] Sign up as a 15-year-old. Confirm you land on the guardian screen,
+      that you can still read a lesson, and that **nothing is saved** — check
+      `select count(*) from attempts where student_id = ...` is still 0
+- [ ] Open the guardian link in a private window. Confirm it says the
+      student's name, and that opening it twice is harmless
+- [ ] Answer a question after consent, and confirm the row appears
+- [ ] Open the same guardian link again and withdraw. Confirm new answers
+      stop being recorded and old ones are still there
+- [ ] Sign up as a 12-year-old and confirm you are refused
+- [ ] The password reset email, opened **on a phone**. This path has never
+      been verified end to end
+- [ ] A share link in a private window
+- [ ] One full question with a figure — Trigonometry Medium has them
+- [ ] The mindmap: expand a unit, drag a branch, then Reset view
+- [ ] Profile → Download my data, and read what comes out
+- [ ] Profile → Delete my account, on a throwaway account. Confirm the rows
+      are gone rather than flagged
+
+---
+
+## 6. Decisions I could not make for you
+
+- **Error monitoring.** `_reportError` in `lib/main.dart` catches everything
+  and writes to the browser console. It is a seam for a real reporter, and
+  it says so. Adding Sentry costs money and sends data to a third party you
+  would then have to name in the privacy policy. Right now, if a student
+  hits a crash, you will not hear about it unless they tell you.
+- **Account lockout.** Rate limiting throttles guesses at one address. It
+  does not stop a slow distributed guess at one account. A real lockout
+  needs a "we have locked your account" email, and there is no email
+  function in this project.
+- **Analytics.** There is none, and no cookie banner is needed because of
+  that. Adding any is a decision with a privacy-policy consequence, and for
+  a product used by minors the answer should probably stay no.
+
+---
+
+## 7. Not blocking, but true
+
+- The Astro+ enrolment flow has six working server functions and no
+  interface. A parent cannot currently be sent a payment link by the app.
+- The guardian consent link is handed to the student to pass on, because
+  the app cannot send email. It works; it is not what you would want.
+- `purge_rate_limits` is not scheduled. Run it by hand occasionally, or
+  leave it — the table is small.
+- `lib/main.dart` is 16,000 lines, and that is the only real lever left on
+  the 1,056 KB payload.
