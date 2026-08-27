@@ -148,13 +148,16 @@ from it. `list_questions` returns prompts and option text but never
 `submit_answer`, server-side, and the response carries back only whether the
 tap was right and the one feedback line for the option chosen.
 
-The exception is `test_item_review`, and only for a paper that is **yours
-and finished**. It returns all four options, their feedback and the correct
+The exception is `test_item_review`, and only for a paper that is **yours,
+finished, and only for the items you actually answered**. It returns all four options, their feedback and the correct
 index, so the end-of-test review can show a student which fifteen they got
 wrong and why. A live paper still reveals nothing — `test_paper` ships no
 answer and `answer_test_item` returns nothing, which suite checks T6, T9 and
-D7c pin. The reasoning, and what the exception costs, is written out at the
-top of `supabase/migrations/test_review_answers.sql`.
+D7c pin. And the review is a review of your work rather than an answer key:
+an item you left blank produces no row, which is what stops a student
+finishing an untouched paper to read fifteen answers out of a unit they are
+about to practise. D12 pins that. The reasoning is written out at the top of
+`supabase/migrations/test_review_answers.sql`.
 
 **2. Every RLS policy is `for select` only.**
 Nothing writes to the database through PostgREST. Every write goes through a
@@ -207,7 +210,7 @@ Question authoring rules live in `docs/AUTHORING_GUIDE.md`; lesson format in
 | Suite | Count | Run against |
 |---|---|---|
 | `tests/test_ama.sql` | 212 checks | a scratch database — **never the live one**, it creates fixture users |
-| `tests/test_sections.sql` | 66 checks | a *different* scratch database from the above, or the same one before it |
+| `tests/test_sections.sql` | 70 checks | a *different* scratch database from the above, or the same one before it |
 | `tests/test_rpc_names.sql` | 12 checks | calls every RPC by named argument |
 | `test/widget_test.dart` | 14 tests | `flutter test` |
 

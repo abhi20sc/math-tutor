@@ -13214,8 +13214,25 @@ class _TestScreenState extends State<TestScreen> {
               style: TextButton.styleFrom(foregroundColor: kAccentDeep),
             ),
           ),
-          if (_showReview)
+          if (_showReview) ...[
+            // The review carries one row per item ANSWERED, not per item on
+            // the paper — see test_review_answers.sql. Say so, rather than
+            // letting a student who skipped four questions count eleven
+            // rows and conclude the app lost them.
+            if (_paper.isNotEmpty && _review.length < _paper.length) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Showing the ${_review.length} you answered. The '
+                  '${_paper.length - _review.length} you left blank are not '
+                  'here, and their answers stay unread.',
+                  style: TextStyle(fontSize: 12.5, height: 1.5, color: kInkSoft),
+                ),
+              ),
+            ],
             for (final r in _review) _ReviewRow(row: r),
+          ],
         ],
         const SizedBox(height: 22),
         PrimaryButton(

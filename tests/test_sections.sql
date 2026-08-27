@@ -435,6 +435,25 @@ begin
     (select count(*) from unit_test_history('MPM2D','Quadratics')
       where test_id not in (select id from practice_tests where student_id=v_uid)) = 0);
 
+  -- D12 is the one that closes the answer-farming route. Without it a
+  -- student could finish an untouched paper purely to read fifteen answers
+  -- out of a unit they are about to practise. Sit a paper, answer exactly
+  -- one item of it, and the review must show exactly that one.
+  declare
+    v_farm bigint;
+    v_rows int;
+  begin
+    select test_id into v_farm from start_test('MPM2D','Factoring');
+    perform answer_test_item(v_farm, 1, 0);
+    perform finish_test(v_farm);
+
+    select count(*) into v_rows from test_item_review(v_farm);
+    perform ok('D12 review shows only the items that were answered',
+      v_rows = 1);
+    perform ok('D13 and the paper itself is still the full fifteen',
+      (select total from practice_tests where id = v_farm) = 15);
+  end;
+
   raise notice '';
   raise notice 'Depth checks passed.';
 end $$;
