@@ -36,6 +36,15 @@ exception
     raise notice 'ok   % (refused: %)', p_name, left(sqlerrm, 58);
 end $$;
 
+-- The harness must not widen the surface it is about to measure.
+--
+-- Postgres grants EXECUTE on a new function to PUBLIC, so these two would
+-- themselves be anon-callable and J6 below would count them. Revoking is
+-- better than excepting them by name: the check then measures what a
+-- signed-out browser can really reach, with nothing carved out.
+revoke all on function sg_ok(text, boolean)  from public, anon;
+revoke all on function sg_raises(text, text) from public, anon;
+
 do $$
 declare
   v_child  uuid;  -- 14, needs a guardian
@@ -209,6 +218,27 @@ begin
     has_function_privilege('anon', 'guardian_consent_by_token(uuid)', 'execute'));
   perform sg_ok('J5  and a signed-out browser can be rate limited',
     has_function_privilege('anon', 'note_rate_limit(text,int,interval)', 'execute'));
+
+  -- The count itself, not just the named ones. This is the check that
+  -- would have caught the three pure helpers that were anon-callable
+  -- because they were never named in a revoke — Postgres grants EXECUTE
+  -- on a new function to PUBLIC, so forgetting one opens it silently.
+  --
+  -- Six, and every one of them deliberate:
+  --   list_courses               the signup screen, before there is a user
+  --   shared_report              a parent reading a report link
+  --   enrolment_by_token         a parent opening an Astro+ payment link
+  --   guardian_consent_by_token  a parent confirming an account
+  --   withdraw_guardian_consent  the same parent changing their mind
+  --   note_rate_limit            throttling sign-in, which happens signed out
+  --
+  -- If this number moves, something was granted that should not have been,
+  -- and the fix is a revoke rather than editing this number.
+  perform sg_ok('J6  exactly six functions are reachable signed out',
+    (select count(*) from pg_proc p
+       join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and has_function_privilege('anon', p.oid, 'execute')) = 6);
 
   -- ---- tidy ---------------------------------------------------------------
   delete from auth.users where email in ('child@sg.test', 'legacy@sg.test');

@@ -556,6 +556,26 @@ $$;
 -- below is unreachable from a browser, and that absence is the protection.
 -- Never add a blanket grant.
 
+-- The three pure helpers first. Postgres grants EXECUTE on a NEW function
+-- to PUBLIC by default, so a function that is never named in a revoke is
+-- reachable by a signed-out browser — which is the opposite of this
+-- project's rule that access is the exception and absence is the
+-- protection.
+--
+-- Nothing leaks through them: age_years does arithmetic on a date you hand
+-- it, and the other two return 13 and 18, both printed in the privacy
+-- policy. They are revoked because an incomplete revoke list is how the
+-- rule quietly stops being true, and because the number of anon-callable
+-- functions should match what the documentation says it is.
+--
+-- Found on the live database after applying this file, not before.
+revoke all on function age_years(date)             from public, anon;
+revoke all on function minimum_age()               from public, anon;
+revoke all on function guardian_required_below()   from public, anon;
+grant execute on function age_years(date)           to authenticated;
+grant execute on function minimum_age()             to authenticated;
+grant execute on function guardian_required_below() to authenticated;
+
 revoke all on function set_my_date_of_birth(date)        from public, anon;
 revoke all on function request_guardian_consent(text)    from public, anon;
 revoke all on function withdraw_guardian_consent(uuid)   from public, anon;
