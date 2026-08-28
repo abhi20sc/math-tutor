@@ -116,16 +116,45 @@ back, which still works but puts the definition in two places again.
 These are in the dashboard, not in SQL, which is why no migration can do
 them and why they are the ones most often forgotten.
 
-- [ ] **Authentication → Sign In / Providers → Email → Confirm email: ON.**
-      It was turned off for testing. Leaving it off means anybody can create
-      an account on somebody else's address.
-- [ ] **Authentication → leaked-password protection: ON.** Supabase's own
-      advisor has been flagging this the whole time.
-- [ ] **Authentication → minimum password length: 8.** The app enforces 8;
-      the server should agree rather than being two rules that can drift.
-- [ ] **Authentication → URL Configuration → Redirect URLs:** add the
-      Cloudflare Pages URL. Without it the password-reset link goes
-      nowhere.
+**Read this before touching the email ones.** Supabase's docs are explicit:
+*"Unless you configure a custom SMTP server for your project, Supabase Auth
+will refuse to deliver messages to addresses that are not part of the
+project's team."*
+
+So on this project **auth email does not reach students today**. Password
+reset works for you, because you are on the team, and silently delivers
+nothing to anybody else. The built-in sender is a testing convenience with
+a small per-hour cap that Supabase says can change without notice.
+
+That makes custom SMTP a PREREQUISITE, not an improvement, and it reorders
+this section: SMTP first, then Confirm email. Turning Confirm email on
+before SMTP would stop every new signup from ever receiving the mail that
+lets them in.
+
+- [ ] **Custom SMTP first.** Authentication → Emails → SMTP Settings. The
+      same Resend key `send-link` wants, so this and the edge function are
+      one sitting. Needs a verified domain to send to arbitrary addresses.
+      Free plan is fine — custom SMTP is not a paid feature.
+- [ ] **THEN Authentication → Sign In / Providers → Email → Confirm email:
+      ON.** It was turned off for testing. Leaving it off means anybody can
+      create an account on somebody else's address. Do not turn it on
+      before the line above.
+- [ ] **Authentication → Rate Limits → emails per hour.** Only worth
+      raising once custom SMTP is set; with it, the default is 30 new users
+      per hour, which is plenty here and adjustable on that page.
+- [ ] ~~**Leaked-password protection.**~~ **Pro plan only, and this org is
+      on Free.** Not something you have forgotten — it is not available.
+      Revisit if the plan changes. The advisor will keep flagging it.
+- [ ] **Authentication → Providers → Email → minimum password length: 8.**
+      Same page as Confirm email:
+      `/dashboard/project/frkswzowskeqmgdrrwab/auth/providers?provider=Email`
+      The app enforces 8; the server should agree rather than being two
+      rules that can drift. The required-characters setting is on that page
+      too, and costs nothing to raise.
+- [ ] **Authentication → URL Configuration → Redirect URLs:** add
+      `https://astro-stem-labs.pages.dev`. Needed for the password-reset
+      link to land, though note that until custom SMTP is set the email
+      carrying that link is not being delivered to students at all.
 - [ ] **The admin account:** a unique strong password, and MFA if Supabase
       offers it on your plan. That account can read every student's work.
 
