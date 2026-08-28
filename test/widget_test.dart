@@ -311,6 +311,25 @@ void main() {
       }
     });
 
+    test('a collapsed unit asks only for the room a node needs', () {
+      // The bug this pins: the first version spaced EVERY unit by its leaf
+      // fan, expanded or not. A collapsed six-unit course reserved 257px
+      // then 423px between nodes only 230px wide, so the row read as a
+      // sparse scatter and the gaps were uneven for no reason a student
+      // could see.
+      //
+      // mindmapFanReach still describes an EXPANDED fan, which is correct
+      // and is what the row asks for when a unit is open. What changed is
+      // that the layout stopped asking for it while the unit is shut. This
+      // records how big that difference is, so nobody quietly puts it back.
+      const nodeHalf = 115.0;
+      for (final count in [4, 5, 6, 7]) {
+        expect(mindmapFanReach(count).outward, greaterThan(nodeHalf * 2),
+            reason: 'an expanded fan should need far more room than a '
+                'collapsed node, or reflowing on expand achieves nothing');
+      }
+    });
+
     test('a unit with no subtopics asks for no room', () {
       expect(mindmapLeafLayout(0), isEmpty);
       expect(mindmapFanReach(0).outward, 0);

@@ -4008,17 +4008,6 @@ class _AuthScreenState extends State<AuthScreen> {
                       color: kInk,
                     ),
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'Maths',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 2.6,
-                      color: kAccent,
-                    ),
-                  ),
                   const SizedBox(height: 8),
                   Text(
                     _registering
@@ -5287,7 +5276,7 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _mapError = 'Could not load the map.';
+        _mapError = 'Could not load your constellation.';
         _loadingMap = false;
       });
     }
@@ -5296,8 +5285,17 @@ class _HomePageState extends State<HomePage> {
   /// Map or Classroom. Only shown while no unit is open — once a student is
   /// inside a unit the choice is about how to BROWSE, and there is nothing
   /// left to browse.
+  /// Classroom or Constellation.
+  ///
+  /// "Map" was a description of the widget rather than a name for it, and it
+  /// sat oddly next to "Classroom", which is a place. The brand already had
+  /// the better word: brand/01-constellation-a.svg is the letter A "drawn
+  /// the way a star chart draws a constellation, five plotted points joined
+  /// by faint lines". That is exactly what this view is, and it is the only
+  /// one of the five logo directions that says "astro" and "plot a point"
+  /// with one mark.
   Widget _buildTopicViewToggle() => SegmentedTabs(
-        labels: const ['Classroom', 'Map'],
+        labels: const ['Classroom', 'Constellation'],
         selected: _topicView == 'map' ? 1 : 0,
         onSelect: (i) => _showTopicView(i == 1 ? 'map' : 'classroom'),
       );
@@ -5332,8 +5330,9 @@ class _HomePageState extends State<HomePage> {
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Text(
-            'The map fills in as you work. Answer a few questions and every '
-            'unit and subtopic will appear here, coloured by how it is going.',
+            'Your constellation fills in as you work. Answer a few questions '
+            'and every unit and subtopic appears here, coloured by how it '
+            'is going.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, height: 1.55, color: kInkSoft),
           ),
@@ -5348,8 +5347,9 @@ class _HomePageState extends State<HomePage> {
         // Nothing to scroll past here, so nothing to trap. The scrim exists
         // for the report, where the map sits inside a scrolling page.
         sleepUntilTapped: false,
-        onOpenUnit: (unit) {
+        onOpenUnit: (unit, section) {
           _showTopicView('classroom');
+          _openSection(section);
           _selectUnit(unit);
         },
       ),
@@ -5734,7 +5734,7 @@ class _HomePageState extends State<HomePage> {
           ),
           _RailLink(
             icon: Icons.person_rounded,
-            label: 'Profile',
+            label: 'Profile and preferences',
             selected: _railView == 'profile',
             onTap: () => setState(() => _railView = 'profile'),
             // Their own face (or initials) instead of a generic person icon.
@@ -5745,42 +5745,17 @@ class _HomePageState extends State<HomePage> {
               photoPath: _profile?.avatarPath,
             ),
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
-            child: Text(
-              'SECTIONS',
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-                color: kInkSoft,
-              ),
-            ),
-          ),
-          _RailLink(
-            icon: Icons.menu_book_rounded,
-            label: 'Learn',
-            selected: _railView == 'topics' && _section == 'learn',
-            onTap: () => _openSection('learn'),
-          ),
-          _RailLink(
-            icon: Icons.edit_note_rounded,
-            label: 'Quiz',
-            selected: _railView == 'topics' && _section == 'quiz',
-            onTap: () => _openSection('quiz'),
-          ),
-          _RailLink(
-            icon: Icons.auto_fix_high_rounded,
-            label: 'Improve',
-            selected: _railView == 'topics' && _section == 'improve',
-            onTap: () => _openSection('improve'),
-          ),
-          _RailLink(
-            icon: Icons.fact_check_rounded,
-            label: 'Test',
-            selected: _railView == 'topics' && _section == 'test',
-            onTap: () => _openSection('test'),
-          ),
+          // The rail is one list now, not two.
+          //
+          // It used to carry SECTIONS (Learn, Quiz, Improve, Test) above
+          // TOPICS (the units), and neither governed the other: you picked
+          // a section, then a topic, and nothing on screen said which was
+          // the parent. Two lists competing to be the primary navigation is
+          // the definition of a confusing sidebar.
+          //
+          // Now the rail answers one question — WHAT are you working on —
+          // and the four sections answer the other — HOW — as tabs on the
+          // page, where they belong to the topic you actually picked.
           Padding(
             padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
             child: Text(
@@ -6433,11 +6408,43 @@ class _HomePageState extends State<HomePage> {
             onSelect: _selectUnit,
           ),
         ],
-        // Below 980px there is no rail, so the sections need a home. A
-        // segmented control at the top of the content is the same shape the
-        // class dashboard already uses for the same job.
-        if (!_wideLayout) ...[
-          const SizedBox(height: 20),
+        // The four sections, as tabs on the topic you have open.
+        //
+        // They used to live in the rail on a wide screen and only appear
+        // here on a phone. That put them next to the topic list rather
+        // than inside it, and left the two reading as siblings when one
+        // belongs to the other: you do not pick Learn and then pick
+        // Quadratics, you pick Quadratics and then decide how to work on
+        // it.
+        //
+        // So they follow the topic now, on every width. The heading above
+        // them names the unit, because a row of tabs with no subject is a
+        // row of tabs about nothing.
+        // The four sections, as tabs.
+        //
+        // ALWAYS shown, whether or not a topic is open, and that is not
+        // symmetry for its own sake: Improve is course-wide by design,
+        // because weakness does not respect unit boundaries. Showing the
+        // tabs only once a unit was picked — which is what the first
+        // version of this did — made Improve unreachable on a wide screen
+        // until the student had opened a topic they did not need.
+        //
+        // The heading above them names the unit when there is one. A row
+        // of tabs with no subject is a row of tabs about nothing, but
+        // "everything in this course" is a perfectly good subject too.
+        if (_units.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          Text(
+            _selectedUnit ?? 'All of ${_profile?.courseLabel ?? 'your course'}',
+            style: TextStyle(
+              fontFamily: kSerif,
+              fontFamilyFallback: kSerifFallback,
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: kInk,
+            ),
+          ),
+          const SizedBox(height: 12),
           SegmentedTabs(
             labels: const ['Learn', 'Quiz', 'Improve', 'Test'],
             selected: _sectionOrder.indexOf(_section).clamp(0, 3),
@@ -17802,9 +17809,11 @@ class _MindMap extends StatefulWidget {
   /// False when the map IS the page and there is nothing to scroll past.
   final bool sleepUntilTapped;
 
-  /// Open this unit in the app. Null in the report, where the map is a
-  /// picture of how things are going rather than a way in.
-  final void Function(String unit)? onOpenUnit;
+  /// Open this unit in the app, in a named section.
+  ///
+  /// Null in the report, where the constellation is a picture of how things
+  /// are going rather than a way in.
+  final void Function(String unit, String section)? onOpenUnit;
 
   const _MindMap({
     required this.units,
@@ -17829,8 +17838,12 @@ class _MindMapState extends State<_MindMap> {
   // Units grow outward from the root toward the left and right margins in a
   // roughly horizontal row, the way a horizontal mind map's primary
   // branches do. Only the subtopics branch vertically.
-  static const _unitOffsetX = 260.0;
-  static const _unitRowGap = 85.0;
+  static const _unitOffsetX = 300.0;
+  // Wide enough that two collapsed unit pills never read as one shape, and
+  // that the row has air in it rather than being a packed strip.
+  static const _unitRowGap = 150.0;
+  // Half a unit node: maxWidth 230, so 115.
+  static const _unitHalfWidth = 115.0;
 
   // Subtopics fan out around their unit like leaves around a branch tip
   // rather than stacking in a column to one side. They spread across an arc
@@ -17868,9 +17881,26 @@ class _MindMapState extends State<_MindMap> {
   ({double towardRoot, double outward}) _fanReach(int unitIndex) =>
       mindmapFanReach(widget.units[unitIndex].subtopics.length);
 
-  void _ensureLayout() {
-    if (_laidOut) return;
-    _laidOut = true;
+  /// Units the student has dragged. Their position is theirs now, and the
+  /// row layout below leaves them alone — a layout that snaps a node back
+  /// after somebody deliberately moved it is a layout arguing with its user.
+  final Set<String> _moved = {};
+
+  /// Lays the units out as ONE horizontal row, evenly, and re-lays them
+  /// whenever what is on screen changes.
+  ///
+  /// The first version spaced every unit by its LEAF FAN, expanded or not.
+  /// So a collapsed constellation reserved room for subtopics nobody could
+  /// see, and the gaps were uneven because they depended on how many
+  /// subtopics each unit happened to have: on a real six-unit course the
+  /// gaps came out 257px then 423px between nodes only 230px wide. It read
+  /// as a sparse scatter rather than a row.
+  ///
+  /// Now a collapsed unit reserves room for a unit, and an expanded one
+  /// reserves room for its fan. Expanding pushes its neighbours outward to
+  /// make space, which is both the correct layout and the most satisfying
+  /// thing this screen does.
+  void _layoutRow() {
     _positions['root'] = _centre;
 
     // Alternating sides, so the two wings stay about the same length.
@@ -17885,17 +17915,41 @@ class _MindMapState extends State<_MindMap> {
       var cursorX = _centre.dx + sign * _unitOffsetX;
       var previousOutward = 0.0;
       for (var i = 0; i < side.length; i++) {
-        final reach = _fanReach(side[i]);
+        final open = _expanded.contains('u${side[i]}');
+        // A collapsed unit is just a node. Half its own width plus a gap is
+        // all the room it needs.
+        final reach = open
+            ? _fanReach(side[i])
+            : (towardRoot: _unitHalfWidth, outward: _unitHalfWidth);
         if (i > 0) {
           cursorX += sign * (previousOutward + _unitRowGap + reach.towardRoot);
         }
-        _positions['u${side[i]}'] = Offset(cursorX, _centre.dy);
+        final id = 'u${side[i]}';
+        if (!_moved.contains(id)) {
+          _positions[id] = Offset(cursorX, _centre.dy);
+        }
         previousOutward = reach.outward;
       }
     }
 
     placeSide(right, 1);
     placeSide(left, -1);
+  }
+
+  void _ensureLayout() {
+    if (_laidOut) return;
+    _laidOut = true;
+    _layoutRow();
+  }
+
+  /// Re-places a unit's leaves around its CURRENT position, overwriting
+  /// whatever was there. Used after the row reflows, because a leaf that
+  /// stayed put while its unit moved is a leaf hanging off nothing.
+  void _replaceSubtopicPositions(int unitIndex) {
+    for (var i = 0; i < widget.units[unitIndex].subtopics.length; i++) {
+      _positions.remove('u$unitIndex-s$i');
+    }
+    _ensureSubtopicPositions(unitIndex);
   }
 
   void _ensureSubtopicPositions(int unitIndex) {
@@ -17985,8 +18039,14 @@ class _MindMapState extends State<_MindMap> {
       if (_expanded.contains('u$i')) {
         _expanded.remove('u$i');
       } else {
-        _ensureSubtopicPositions(i);
         _expanded.add('u$i');
+      }
+      // Re-space the row for what is now on screen, then place this unit's
+      // leaves around wherever it ended up. Order matters: the fan hangs
+      // off the unit, so the unit has to move first.
+      _layoutRow();
+      for (var u = 0; u < widget.units.length; u++) {
+        if (_expanded.contains('u$u')) _replaceSubtopicPositions(u);
       }
     });
     _fitToContent();
@@ -17999,6 +18059,9 @@ class _MindMapState extends State<_MindMap> {
     setState(() {
       _positions.clear();
       _expanded.clear();
+      // Including everything the student dragged. That is the whole point
+      // of the button: one tap undoes any amount of rearranging.
+      _moved.clear();
       _laidOut = false;
       _ensureLayout();
     });
@@ -18012,6 +18075,8 @@ class _MindMapState extends State<_MindMap> {
     final scale = _transform.value.getMaxScaleOnAxis();
     final scaled = delta / scale;
     setState(() {
+      // From here on this unit is where the student put it.
+      _moved.add('u$unitIndex');
       _positions['u$unitIndex'] = _positions['u$unitIndex']! + scaled;
       for (var i = 0; i < widget.units[unitIndex].subtopics.length; i++) {
         final id = 'u$unitIndex-s$i';
@@ -18125,7 +18190,7 @@ class _MindMapState extends State<_MindMap> {
                   color: kCard.withValues(alpha: 0.9),
                   shape: const CircleBorder(),
                   child: IconButton(
-                    tooltip: 'Reset view',
+                    tooltip: 'Reset the view',
                     onPressed: _resetView,
                     icon: Icon(Icons.center_focus_strong_rounded,
                         size: 19, color: kInkSoft),
@@ -18138,8 +18203,8 @@ class _MindMapState extends State<_MindMap> {
                   left: 12,
                   bottom: 10,
                   child: Text(
-                    'Drag to pan, or to move a topic · pinch or scroll to '
-                    'zoom · tap a unit to open its subtopics',
+                    'Drag to pan, or to move a topic. Pinch or scroll to '
+                    'zoom. Tap a unit to open its subtopics.',
                     style: TextStyle(fontSize: 10.5, color: kInkSoft),
                   ),
                 ),
@@ -18238,22 +18303,63 @@ class _MindMapState extends State<_MindMap> {
                         : Icons.expand_more_rounded,
                     size: 15,
                     color: kInkSoft),
-                // The map is a way in, not only a picture — but opening a
-                // unit is a separate, deliberate tap from spreading it out
-                // to look at. Tapping the node itself only ever expands.
+                // The constellation is a way in, not only a picture. But
+                // opening a unit is a separate, deliberate tap from
+                // spreading it out to look at, so tapping the node itself
+                // only ever expands.
+                //
+                // The menu goes straight to a SECTION rather than to the
+                // unit's default one. From a map of how you are doing, the
+                // useful next move is usually "read this one" or "drill
+                // this one", and making the student land on Quiz and then
+                // navigate again would waste the thing the map just told
+                // them.
                 if (widget.onOpenUnit != null) ...[
                   const SizedBox(width: 2),
-                  InkResponse(
-                    radius: 16,
-                    onTap: () => widget.onOpenUnit!(unit.unit),
-                    child: Tooltip(
-                      message: 'Open ${unit.unit}',
-                      child: Padding(
-                        padding: const EdgeInsets.all(3),
-                        child: Icon(Icons.arrow_forward_rounded,
-                            size: 15, color: kAccent),
+                  PopupMenuButton<String>(
+                    tooltip: 'Open ${unit.unit}',
+                    padding: EdgeInsets.zero,
+                    position: PopupMenuPosition.under,
+                    color: kCard,
+                    icon: Icon(Icons.more_horiz_rounded,
+                        size: 17, color: kAccent),
+                    constraints: const BoxConstraints(minWidth: 176),
+                    onSelected: (section) =>
+                        widget.onOpenUnit!(unit.unit, section),
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        enabled: false,
+                        height: 30,
+                        child: Text(
+                          unit.unit.toUpperCase(),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.1,
+                              color: kInkSoft),
+                        ),
                       ),
-                    ),
+                      for (final s in const [
+                        ('learn', 'Learn', Icons.menu_book_rounded),
+                        ('quiz', 'Quiz', Icons.edit_note_rounded),
+                        ('improve', 'Improve', Icons.auto_fix_high_rounded),
+                        ('test', 'Test', Icons.fact_check_rounded),
+                      ])
+                        PopupMenuItem(
+                          value: s.$1,
+                          height: 40,
+                          child: Row(
+                            children: [
+                              Icon(s.$3, size: 17, color: kInkSoft),
+                              const SizedBox(width: 10),
+                              Text(s.$2,
+                                  style:
+                                      TextStyle(fontSize: 13.5, color: kInk)),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ],
@@ -18351,7 +18457,18 @@ class _MapNodeState extends State<_MapNode> {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
+    // Animated, and the animation earns its place: expanding a unit pushes
+    // its neighbours outward to make room, and a jump-cut would read as the
+    // constellation being rebuilt rather than opening. 240ms is long enough
+    // to follow and short enough not to be waited on.
+    //
+    // A drag has to be instant, though, or the node lags the finger — so
+    // the duration collapses to zero while one is in progress.
+    return AnimatedPositioned(
+      duration: (_active || MediaQuery.disableAnimationsOf(context))
+          ? Duration.zero
+          : const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
       left: widget.position.dx,
       top: widget.position.dy,
       child: FractionalTranslation(
