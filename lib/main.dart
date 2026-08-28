@@ -3609,13 +3609,102 @@ class ClassRepository {
 ///
 /// What it must never do is include what the student was answering. An
 /// error report is not a place for question text.
+/// The app's version, sent with a crash so a report can be tied to a build.
+/// Matches `version:` in pubspec.yaml — if you bump one, bump the other.
+const String kAppVersion = '1.0.0+1';
+
+/// True while a crash is being reported, so a failure inside the reporter
+/// cannot report itself. Without this, one broken Supabase call becomes an
+/// unbounded recursion at exactly the moment the app is least able to
+/// survive it.
+bool _reportingError = false;
+
+/// Anything in an error message that should not be stored.
+///
+/// Public, like the other rules with tests over them: what a crash log
+/// does NOT keep is the part worth proving, and it cannot be proved from
+/// outside the library if it is private.
+///
+/// An exception carries whatever the code was holding, and this app holds
+/// email addresses, share tokens and consent tokens. A crash log is not a
+/// place to accumulate those — not because the table is insecure, but
+/// because the safest data is the data that was never collected.
+///
+/// Deliberately blunt. Over-redacting costs a little debuggability;
+/// under-redacting puts a student's guardian's address in a log table for
+/// ninety days.
+String redactForCrashLog(String text) => text
+    // Anything shaped like an email.
+    .replaceAll(RegExp(r'[\w.+-]+@[\w-]+\.[\w.-]+'), '[email]')
+    // Uuids: every token in this app is one.
+    .replaceAll(
+        RegExp(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+            r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'),
+        '[uuid]')
+    // JWTs, which is what a leaked session looks like.
+    .replaceAll(RegExp(r'eyJ[\w-]+\.[\w-]+\.[\w-]+'), '[jwt]');
+
+/// What makes two crashes the same crash.
+///
+/// The message plus the first line of the stack. Not the whole stack —
+/// two occurrences of one bug can differ further down, and a fingerprint
+/// that changes is a fingerprint that does not dedupe.
+String crashFingerprint(String message, StackTrace? stack) {
+  final head = stack?.toString().split('\n').first.trim() ?? '';
+  final basis = '$message|$head';
+  // Not a hash: there is no cheap one in the SDK and the server hashes the
+  // message as a fallback anyway. A bounded prefix is enough to group by.
+  return basis.length <= 64 ? basis : basis.substring(0, 64);
+}
+
 void _reportError(Object error, StackTrace? stack, {String? context}) {
   final where = context == null ? '' : ' [$context]';
   // debugPrint rather than print: it throttles, so an error that fires on
   // every frame cannot lock the tab up on its own log output.
   debugPrint('AstroError$where: $error');
   if (stack != null) debugPrint(stack.toString());
+
+  // And then somewhere you will actually see it. The console is fine for
+  // the person with the browser open, which is never the student.
+  _sendError(error, stack, context);
 }
+
+/// Posts a crash to note_client_error, and cannot make anything worse.
+///
+/// Every failure path here is a silent return. An error reporter that
+/// throws, blocks, or retries is a bug multiplier — the whole value of it
+/// is that the app carries on exactly as it would have.
+void _sendError(Object error, StackTrace? stack, String? context) {
+  if (_reportingError) return;
+
+  // Errors thrown before Supabase.initialize have nowhere to go. Asking
+  // for the client would itself throw, which is why this is checked rather
+  // than caught.
+  if (!_supabaseReady) return;
+
+  _reportingError = true;
+  try {
+    final message = redactForCrashLog(error.toString());
+    // Fire and forget, explicitly. Awaiting would make every crash wait on
+    // the network, and a crash during startup would hold the first frame.
+    Supabase.instance.client.rpc('note_client_error', params: {
+      'p_context': context ?? 'unknown',
+      'p_message': message,
+      'p_stack': stack == null ? null : redactForCrashLog(stack.toString()),
+      'p_fingerprint': crashFingerprint(message, stack),
+      'p_version': kAppVersion,
+    }).ignore();
+  } catch (_) {
+    // Offline, throttled, not deployed, signed out mid-flight. All the
+    // same: the console line above already happened.
+  } finally {
+    _reportingError = false;
+  }
+}
+
+/// Set once Supabase.initialize has returned. Guards the reporter against
+/// firing before there is a client to fire through.
+bool _supabaseReady = false;
 
 Future<void> main() async {
   // Required because Supabase.initialize is async and runs before runApp.
@@ -3640,6 +3729,10 @@ Future<void> main() async {
   // already a publishable one, so this is a rename, not a change of secret.
   await Supabase.initialize(
       url: supabaseUrl, publishableKey: supabaseAnonKey);
+  // From here a crash has somewhere to go. Before it, the console is all
+  // there is — which is why the handlers above are installed first anyway:
+  // a crash inside initialize is one worth seeing, even if only locally.
+  _supabaseReady = true;
 
   runApp(const MathTutorApp());
 }

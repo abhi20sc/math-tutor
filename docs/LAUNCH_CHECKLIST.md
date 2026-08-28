@@ -51,6 +51,7 @@ by trusting this list, and the ticks are what was actually found there:
 - [x] `supabase/migrations/enrolment_links.sql` — `my_enrolment_link`
 - [x] `supabase/migrations/reachable_pool.sql` — applied 29 August 2026
 - [x] `supabase/migrations/indexes_and_policy_perf.sql` — all five indexes
+- [x] `supabase/migrations/client_errors.sql` — applied 29 August 2026
 
 **All seven are now applied.** `reachable_pool.sql` and the `search_path`
 fix from `student_safeguarding.sql` went on live on 29 August 2026, and
@@ -374,11 +375,28 @@ The things that have never been tested end to end on hardware.
 
 ## 6. Decisions I could not make for you
 
-- **Error monitoring.** `_reportError` in `lib/main.dart` catches everything
-  and writes to the browser console. It is a seam for a real reporter, and
-  it says so. Adding Sentry costs money and sends data to a third party you
-  would then have to name in the privacy policy. Right now, if a student
-  hits a crash, you will not hear about it unless they tell you.
+- ~~**Error monitoring.**~~ **Done, 29 August 2026, and not with Sentry.**
+  Crashes now go to a `client_errors` table in your own database —
+  `supabase/migrations/client_errors.sql`, applied to live. Same operator,
+  same privacy policy, nothing new to pay for and no third-party processor
+  to disclose, which for diagnostic data about children was the deciding
+  argument rather than the price.
+
+  To read them, signed in as the admin:
+
+  ```sql
+  select last_seen, seen_count, context, app_version, message
+  from admin_recent_errors(7);
+  ```
+
+  Both ends redact addresses, uuids and JWTs, the write is capped at 20 an
+  hour per student so a crash in `build()` cannot flood it, repeats
+  increment a counter instead of adding rows, and the table is unreadable
+  by any client key. Nothing prunes it — `select purge_client_errors()`
+  drops anything older than 90 days.
+
+  **This does not page you.** It is a table you have to look at. Checking
+  it after each deploy is the habit that makes it worth having.
 - **Account lockout.** Rate limiting throttles guesses at one address. It
   does not stop a slow distributed guess at one account. A real lockout
   needs a "we have locked your account" email, and there is no email

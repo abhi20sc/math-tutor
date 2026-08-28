@@ -889,6 +889,67 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // Crash reporting
+  // -------------------------------------------------------------------------
+  //
+  // The reporter runs when the app is already broken, so the things worth
+  // testing are what it refuses to do: leak, and change its mind about what
+  // counts as the same crash.
+  group('crash redaction', () {
+    test('an email address never reaches the table', () {
+      expect(redactForCrashLog('failed to send to parent@example.co.uk'),
+          'failed to send to [email]');
+      expect(redactForCrashLog('a.b+tag-1@sub.domain.ca and c@d.io'),
+          '[email] and [email]');
+    });
+
+    test('a token never reaches the table', () {
+      // Every share, consent and payment token in this app is a uuid. A
+      // crash log that accumulated them would be a list of working links.
+      expect(
+        redactForCrashLog('shared_report(3f2504e0-4f89-11d3-9a0c-0305e82c3301) failed'),
+        'shared_report([uuid]) failed',
+      );
+    });
+
+    test('a session token never reaches the table', () {
+      expect(
+        redactForCrashLog('Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc-def_123'),
+        'Bearer [jwt]',
+      );
+    });
+
+    test('ordinary text is left alone', () {
+      const plain = 'RangeError (index): Invalid value: Not in range 0..3';
+      expect(redactForCrashLog(plain), plain);
+    });
+
+    test('the same crash fingerprints the same, twice', () {
+      final a = crashFingerprint('Bad state: no element', StackTrace.fromString(
+          '#0 firstWhere (dart:core)\n#1 somethingElse (main.dart:1)'));
+      final b = crashFingerprint('Bad state: no element', StackTrace.fromString(
+          '#0 firstWhere (dart:core)\n#1 aDifferentCaller (main.dart:99)'));
+      // Same message, same top frame, different tail: still one crash.
+      expect(a, b);
+    });
+
+    test('different crashes fingerprint differently', () {
+      expect(
+        crashFingerprint('Bad state: no element', null),
+        isNot(crashFingerprint('RangeError: index out of range', null)),
+      );
+    });
+
+    test('a fingerprint fits the column it is stored in', () {
+      // note_client_error takes left(p_fingerprint, 64). A longer one would
+      // be silently truncated server-side, and two crashes sharing a 64-char
+      // prefix would merge into one row.
+      final long = crashFingerprint('x' * 300, StackTrace.fromString('y' * 300));
+      expect(long.length, lessThanOrEqualTo(64));
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // The ladder on the screen
   // -------------------------------------------------------------------------
   //
