@@ -44,6 +44,7 @@ lesson, or a student's history.
 - [ ] `supabase/migrations/learn_journey.sql`
 - [ ] `supabase/migrations/my_progress.sql`
 - [ ] `supabase/migrations/student_safeguarding.sql`
+- [ ] `supabase/migrations/enrolment_links.sql`
 - [ ] `supabase/migrations/indexes_and_policy_perf.sql`
 
 **Do NOT re-run `astro_math_assist_setup.sql` or any question file.** They
@@ -178,9 +179,19 @@ The things that have never been tested end to end on hardware.
 - [ ] One full question with a figure — Trigonometry Medium has them
 - [ ] The mindmap: expand a unit, drag a branch, then Reset view
 - [ ] The Astro+ form, and the link it gives you, opened in a private window
-- [ ] Every dialog, on the phone. Five of them are covered by widget tests
-      at 375x812; the ones that hold a repository cannot be tested that way
-      and have never been seen on a phone
+- [ ] Every dialog, on the phone. Five are covered by widget tests at
+      375x812; the rest have never been seen on a phone and cannot be
+      tested that way.
+
+      Worth knowing why, so nobody spends an afternoon on it again: a
+      widget holding a repository reaches Supabase.instance in its field
+      initialisers, and Supabase.initialize hangs inside a widget test —
+      it waits on platform channels for secure storage that the test
+      binding does not provide. Making those screens testable means
+      injecting the repositories rather than constructing them inline,
+      which is its own piece of work and probably belongs with splitting
+      main.dart. Until then the signup form, the guardian screen, the
+      Astro+ sheet and the admin queue are hand-checked only.
 - [ ] Profile → Download my data, and read what comes out
 - [ ] Profile → Delete my account, on a throwaway account. Confirm the rows
       are gone rather than flagged
