@@ -189,12 +189,33 @@ still outstanding, and both exist because the code changed under them.
       After deploying, send yourself a consent link and watch for the mail.
       A silent success and a silent failure look identical from the app.
 
-- [ ] **Decide what to do about `send-consent-email`.** It is deployed on
-      the live project and is NOT in this repository — an orphan from
-      before `send-link`, which cannot be read, reviewed or updated from
-      here. Either delete it, or bring its source back into
-      `supabase/functions/` so it is maintained like the rest. The same
-      question applies to `send-report-now` and `send-weekly-reports`.
+- [ ] **Delete the three dead edge functions.** `send-consent-email`,
+      `send-report-now` and `send-weekly-reports` are deployed on the live
+      project, are NOT in this repository, and — checked on 29 August 2026
+      — **cannot run**. They call a schema that no longer exists:
+
+      | The function wants | On the database |
+      |---|---|
+      | `report_recipients` table | gone |
+      | `pending_consents_for()` | gone |
+      | `mark_consent_sent()` | gone |
+      | `reports_due()` | gone |
+      | `record_report_sent()` | gone |
+      | `weekly_report()` | gone |
+
+      They belong to the design that `astro_math_assist_setup.sql`
+      replaced. Each would fail on its first RPC call. They also link to
+      `/confirm?token=` and `/unsubscribe?token=` — path routes this app
+      does not have; every link it makes is a query string on the root.
+
+      This was written down as a decision. It is not one — they are dead
+      code that can only mislead whoever reads the function list next.
+      Delete them in the dashboard.
+
+      Worth keeping in mind: the weekly parent report was a real feature
+      once, and that source is the only surviving copy of it. If you ever
+      want it back, save the file before deleting the function — it needs a
+      schema rebuild, not a redeploy.
 
       `--no-verify-jwt` on the webhook is required: Stripe is not a
       signed-in user. The signature check inside the function replaces it,
