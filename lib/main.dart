@@ -5575,6 +5575,66 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// The header, above everything, on every screen and at every width.
+  ///
+  /// The brand and the Classroom/Constellation switch used to live in the
+  /// left rail, which meant they were absent exactly where they were most
+  /// wanted: the rail collapses when a question opens, and it does not
+  /// exist at all on a phone. So the one control that governs the whole
+  /// surface disappeared whenever the surface got busy, and the phone had a
+  /// second copy of it pasted into the content instead — two switches, one
+  /// state, and neither in a fixed place.
+  ///
+  /// One bar, one copy, always there. The rail goes back to answering only
+  /// "what are you working on".
+  Widget _buildTopBar() {
+    final narrow = !_wideLayout;
+    return Container(
+      height: 58,
+      decoration: BoxDecoration(
+        color: kCard,
+        border: Border(bottom: BorderSide(color: kLine)),
+      ),
+      padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 18),
+      child: Row(
+        children: [
+          const BrandBadge(size: 26),
+          const SizedBox(width: 9),
+          // The wordmark is the first thing to go when space is short. The
+          // badge alone still identifies the app, and the switch beside it
+          // is the thing a student is actually reaching for.
+          if (!narrow)
+            Text(
+              kBrandName,
+              style: TextStyle(
+                fontFamily: kSerif,
+                fontFamilyFallback: kSerifFallback,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: kInk,
+              ),
+            ),
+          const Spacer(),
+          // Centre of attention rather than centre of the bar: it sits with
+          // the other controls so the eye finds all of them in one place.
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: narrow ? 232 : 268),
+            child: _buildTopicViewToggle(),
+          ),
+          const SizedBox(width: 6),
+          IconButton(
+            icon: Icon(Icons.help_outline_rounded, size: 21, color: kInkSoft),
+            tooltip: 'How to use Astro STEM Labs',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HowToUseScreen()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Map or Classroom. Only shown while no unit is open — once a student is
   /// inside a unit the choice is about how to BROWSE, and there is nothing
   /// left to browse.
@@ -5697,6 +5757,27 @@ class _HomePageState extends State<HomePage> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             _wideLayout = constraints.maxWidth >= 980;
+            // The header is outside everything below it, which is the whole
+            // point: it survives the rail collapsing, a question opening,
+            // the profile pane, and the switch between the two widths.
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildTopBar(),
+                Expanded(child: _buildBody()),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Everything under the header. Split out only so the header can wrap it;
+  /// the two branches below are unchanged.
+  Widget _buildBody() {
+    {
+      {
             if (!_wideLayout) {
               // No `&& _selectedUnit == null` here, and that was the bug:
               // on a phone the switch is in the content, so by the time a
@@ -5707,14 +5788,9 @@ class _HomePageState extends State<HomePage> {
               if (_topicView == 'map') {
                 return Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildTopicViewToggle(),
-                      const SizedBox(height: 12),
-                      Expanded(child: _buildMapPane()),
-                    ],
-                  ),
+                  // No toggle here any more — it is in the header, where
+                  // it is reachable whether or not a topic is open.
+                  child: _buildMapPane(),
                 );
               }
               return Center(
@@ -5746,14 +5822,7 @@ class _HomePageState extends State<HomePage> {
                       // measure it has always had.
                       ? Padding(
                           padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _buildTopicViewToggle(),
-                              const SizedBox(height: 14),
-                              Expanded(child: _buildMapPane()),
-                            ],
-                          ),
+                          child: _buildMapPane(),
                         )
                       : Center(
                           child: ConstrainedBox(
@@ -5770,10 +5839,8 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             );
-          },
-        ),
-      ),
-    );
+      }
+    }
   }
 
   /// The left rail: brand, the three navigation links, and the topic list.
@@ -5976,19 +6043,18 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // The brand moved to the header. Repeating it here would
+                // put the logo twice on one screen, eleven pixels apart.
                 Row(
                   children: [
-                    const BrandBadge(size: 26),
-                    const SizedBox(width: 9),
                     Expanded(
                       child: Text(
-                        kBrandName,
+                        'MY COURSE',
                         style: TextStyle(
-                          fontFamily: kSerif,
-                          fontFamilyFallback: kSerifFallback,
-                          fontSize: 17,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w700,
-                          color: kInk,
+                          letterSpacing: 1.2,
+                          color: kInkSoft,
                         ),
                       ),
                     ),
@@ -6002,7 +6068,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 // Pulled 10px left, out of the header's own padding, so the
                 // chips line up with the rail links below rather than
                 // sitting proud of them. The header insets its content by
@@ -6068,15 +6134,6 @@ class _HomePageState extends State<HomePage> {
               photoPath: _profile?.avatarPath,
             ),
           ),
-          // How you are looking at the course. In the rail rather than in
-          // the content, because it governs the whole surface and has to be
-          // reachable at every moment — including mid-question, which is
-          // exactly when a student wants to go and look at where they are.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 4, 14, 2),
-            child: _buildTopicViewToggle(),
-          ),
-
           // The rail is one list now, not two.
           //
           // It used to carry SECTIONS (Learn, Quiz, Improve, Test) above
@@ -6166,10 +6223,7 @@ class _HomePageState extends State<HomePage> {
             onPressed: () => setState(() => _railCollapsed = false),
           ),
           const SizedBox(height: 10),
-          icon(Icons.menu_book_rounded, 'Learn', 'learn'),
-          icon(Icons.edit_note_rounded, 'Quiz', 'quiz'),
-          icon(Icons.auto_fix_high_rounded, 'Improve', 'improve'),
-          icon(Icons.fact_check_rounded, 'Test', 'test'),
+          for (final s in kSections) icon(s.$3, s.$2, s.$1),
           const Spacer(),
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -19063,6 +19117,35 @@ class _MindMapState extends State<_MindMap> {
     });
   }
 
+  /// Drags the WHOLE constellation by its centre.
+  ///
+  /// The centre used to take the default node drag, which moved only its own
+  /// position. Everything else stayed: the rib anchors are laid out from the
+  /// canvas centre and never moved, and the painter draws the spine through
+  /// the ROOT while drawing the bones from those anchors. So pulling the
+  /// title away slid the pill and the spine off on their own and left the
+  /// units and topics behind — the figure came apart, which is exactly what
+  /// it looked like.
+  ///
+  /// A centre is not a thing you reposition relative to its own diagram;
+  /// there is no arrangement where the middle of a fishbone sits somewhere
+  /// else. So it is a handle for the whole figure instead, and everything
+  /// travels with it — nodes, leaves and anchors alike.
+  void _moveEverything(Offset delta) {
+    final scale = _transform.value.getMaxScaleOnAxis();
+    final scaled = delta / scale;
+    setState(() {
+      for (final id in _positions.keys.toList()) {
+        _positions[id] = _positions[id]! + scaled;
+      }
+      // The anchors are canvas coordinates like the rest, so they move too.
+      // Leaving them behind is the whole bug, one layer down.
+      for (final id in _ribAnchors.keys.toList()) {
+        _ribAnchors[id] = _ribAnchors[id]! + scaled;
+      }
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Build
   // -------------------------------------------------------------------------
@@ -19220,19 +19303,23 @@ class _MindMapState extends State<_MindMap> {
 
     addNode(
       'root',
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        decoration: BoxDecoration(
-          color: kAccentSurface,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: kCardShadow,
-        ),
-        child: Text(
-          widget.centreLabel,
-          style: TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w700, color: kOnAccent),
+      Tooltip(
+        message: 'Drag to move the whole constellation',
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          decoration: BoxDecoration(
+            color: kAccentSurface,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: kCardShadow,
+          ),
+          child: Text(
+            widget.centreLabel,
+            style: TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w700, color: kOnAccent),
+          ),
         ),
       ),
+      onDrag: _moveEverything,
     );
 
     for (var i = 0; i < widget.units.length; i++) {
@@ -19355,12 +19442,7 @@ class _MindMapState extends State<_MindMap> {
                               color: kInkSoft),
                         ),
                       ),
-                      for (final s in const [
-                        ('learn', 'Learn', Icons.menu_book_rounded),
-                        ('quiz', 'Quiz', Icons.edit_note_rounded),
-                        ('improve', 'Improve', Icons.auto_fix_high_rounded),
-                        ('test', 'Test', Icons.fact_check_rounded),
-                      ])
+                      for (final s in kSections)
                         PopupMenuItem(
                           value: s.$1,
                           height: 40,
@@ -19658,6 +19740,361 @@ class _MindMapEdgePainter extends CustomPainter {
 
 
 /// The student's own report, with the sharing controls attached.
+/// The four sections: id, label and icon, defined ONCE.
+///
+/// This list existed twice already, spelled out in the collapsed rail strip
+/// and again in the topic popup menu, and the How to use page made a third
+/// copy that promptly disagreed with both — it taught a Test icon the app
+/// never shows. A help page that draws different symbols than the interface
+/// is worse than no help page, because it is confidently wrong.
+///
+/// The order is the order the tabs appear in, so anything built from this
+/// reads the same way round as the thing it describes.
+const List<(String, String, IconData)> kSections = [
+  ('learn', 'Learn', Icons.menu_book_rounded),
+  ('quiz', 'Quiz', Icons.edit_note_rounded),
+  ('improve', 'Improve', Icons.auto_fix_high_rounded),
+  ('test', 'Test', Icons.fact_check_rounded),
+];
+
+// ---------------------------------------------------------------------------
+// How to use
+// ---------------------------------------------------------------------------
+//
+// Reachable from the header on every screen, because the moment somebody
+// needs this is the moment they are already lost, and a help page filed
+// under Profile is a help page for people who are not lost.
+//
+// It explains the things the interface cannot say for itself: what the four
+// sections are FOR, and what the progress words mean. The second one earns
+// its place. "Completed" now requires having attempted every question a
+// student can reach as well as getting 90% of them right first time, and a
+// rule that strict is unfair if it is never stated. A student who cannot
+// see why a topic will not turn green concludes the app is broken.
+
+class HowToUseScreen extends StatelessWidget {
+  const HowToUseScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kSurface,
+      appBar: AppBar(
+        backgroundColor: kSurface,
+        surfaceTintColor: kSurface,
+        elevation: 0,
+        foregroundColor: kInk,
+        title: const Text('How to use Astro STEM Labs',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+            children: [
+              Text(
+                'Everything here is practice. Nothing is a school mark, '
+                'nobody is timing you, and a wrong answer is the most useful '
+                'thing that can happen, because every one of them explains '
+                'the mistake before it shows you the answer.',
+                style: TextStyle(fontSize: 15.5, height: 1.6, color: kInk),
+              ),
+              const SizedBox(height: 26),
+
+              const _HelpHeading('The four ways to work on a topic'),
+              const _HelpNote(
+                'Pick a topic first, then choose how you want to work on it. '
+                'The four tabs sit at the top of the topic.',
+              ),
+              // Icons and order both come from kSections, so this cannot
+              // teach a symbol the app does not draw.
+              for (final section in kSections)
+                _HelpRow(
+                  icon: section.$3,
+                  title: section.$2,
+                  body: _sectionHelp[section.$1]!,
+                ),
+
+              const SizedBox(height: 26),
+              const _HelpHeading('Classroom and Constellation'),
+              // No icons on this pair, unlike the four sections above.
+              //
+              // The sections have icons because the app draws those exact
+              // icons on their tabs, so the page is naming something the
+              // student can see. Classroom and Constellation are chosen
+              // from a segmented switch that has NO icons, so inventing two
+              // here would teach symbols the interface never shows — the
+              // same mistake the Test row made and the reason kSections
+              // exists.
+              //
+              // Separately and worth writing down: Icons.dashboard_rounded
+              // and Icons.hub_rounded, which is what this pair had, drew
+              // NOTHING in the web build. Both codepoints are present in
+              // the bundled MaterialIcons font and it is not icon
+              // tree-shaking, because --no-tree-shake-icons renders them
+              // exactly the same. I could not explain it. If an icon ever
+              // comes out blank here, that is the shape of the problem, and
+              // swapping it for one the app already draws is the workaround
+              // that worked.
+              const _HelpRow(
+                title: 'Classroom',
+                body: 'The list. Better for finding one topic and getting on '
+                    'with it.',
+              ),
+              const _HelpRow(
+                title: 'Constellation',
+                body: 'The whole course as one picture, every unit and every '
+                    'subtopic, coloured by how it is going. Better for seeing '
+                    'where you stand. Tap a unit to open its subtopics, drag '
+                    'anything to move it, drag the title in the middle to '
+                    'move the whole thing, and use Reset view to put it all '
+                    'back.',
+              ),
+              const _HelpNote(
+                'The switch is in the bar at the top, so you can go and look '
+                'at the constellation without losing your place.',
+              ),
+
+              const SizedBox(height: 26),
+              const _HelpHeading('What the progress words mean'),
+              const _HelpNote(
+                'Two different things decide these: how much of a topic you '
+                'have attempted, and how much of it you get right first try. '
+                'A high score on two questions is not the same as a high '
+                'score on all of them, so the words say both.',
+              ),
+              for (final rung in Progress.values)
+                _HelpRung(rung: rung),
+              const _HelpNote(
+                'Completed needs every question you can open, not just a good '
+                'score, which is why a topic can sit on Nearly there while '
+                'reading 100%. It means there is more of it to see.',
+              ),
+
+              const SizedBox(height: 26),
+              const _HelpHeading('Sharing it with a parent'),
+              const _HelpNote(
+                'My report makes a private link you can send to a parent or '
+                'guardian. They see how you are getting on without needing an '
+                'account. You can see how many times it has been opened, and '
+                'you can stop the link working at any moment. Nobody gets a '
+                'link unless you make one.',
+              ),
+
+              const SizedBox(height: 26),
+              const _HelpHeading('Astro+'),
+              const _HelpNote(
+                'Every topic is open without paying. Astro+ adds the harder '
+                'two levels of each one, Challenge and Advanced. It makes the '
+                'course bigger rather than unlocking anything you have '
+                'already earned, and the progress words work the same way on '
+                'both: they measure the questions you can actually open.',
+              ),
+
+              const SizedBox(height: 26),
+              const _HelpHeading('If something goes wrong'),
+              const _HelpNote(
+                'Tell us. A page that will not load or a question that looks '
+                'wrong is worth reporting, and it is the fastest way for it '
+                'to get fixed.',
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () => showContactSheet(context),
+                  icon: const Icon(Icons.mail_outline_rounded, size: 18),
+                  label: const Text('Contact us'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What each section is FOR, keyed by the same id kSections uses, so a
+/// section without an explanation fails loudly at the lookup rather than
+/// quietly rendering a gap.
+const Map<String, String> _sectionHelp = {
+  'learn': 'The explanation, worked through one step at a time. Start here '
+      'if a topic is new, or come back to it when something stops making '
+      'sense.',
+  'quiz': 'One question at a time, with feedback straight away. This is '
+      'where most of the work happens and where your progress comes from.',
+  'improve': 'The whole course sorted by what is costing you marks. It looks '
+      'across every topic, so it is the place to go when you do not know '
+      'what to practise next.',
+  'test': 'A set of questions with no feedback until the end, so you find '
+      'out what you can do without help. Afterwards you can review every '
+      'question and see what went wrong.',
+};
+
+class _HelpHeading extends StatelessWidget {
+  final String text;
+  const _HelpHeading(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontFamily: kSerif,
+            fontFamilyFallback: kSerifFallback,
+            fontSize: 19,
+            fontWeight: FontWeight.w600,
+            color: kInk,
+          ),
+        ),
+      );
+}
+
+class _HelpNote extends StatelessWidget {
+  final String text;
+  const _HelpNote(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(
+          text,
+          style: TextStyle(fontSize: 14, height: 1.6, color: kInkSoft),
+        ),
+      );
+}
+
+class _HelpRow extends StatelessWidget {
+  /// Null draws no icon AND no gap where one would have been, rather than
+  /// an empty 32px indent that reads as a picture that failed to load.
+  final IconData? icon;
+  final String title;
+  final String body;
+
+  const _HelpRow({
+    this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 13, 16, 14),
+          decoration: BoxDecoration(
+            color: kCard,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: kLine),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 20, color: kAccent),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: kInk,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      body,
+                      style: TextStyle(
+                          fontSize: 13.5, height: 1.55, color: kInkSoft),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+/// One rung of the ladder, drawn in its own colour.
+///
+/// Generated from Progress.values rather than written out, so this page
+/// cannot fall out of step with the rule. A new rung appears here the day it
+/// is added, which is the only version of this that stays true.
+class _HelpRung extends StatelessWidget {
+  final Progress rung;
+  const _HelpRung({required this.rung});
+
+  static String _meaning(Progress p) => switch (p) {
+        Progress.notStarted => 'You have not opened this one yet.',
+        Progress.justStarted =>
+          'You have answered one or two. Not enough to score fairly, so '
+              'there is no percentage yet.',
+        Progress.needsWork =>
+          'Under half right first try. Worth going back to Learn.',
+        Progress.developing => 'Between half and about two thirds first try.',
+        Progress.nearlyThere =>
+          'Going well, but there are questions in here you have not seen.',
+        Progress.completed =>
+          'You have attempted every question you can open, and got at least '
+              '90% of them right first try.',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final band = progressBand(rung);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: bandColour(band),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${progressWord(rung)}. ',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: bandTextColour(band),
+                    ),
+                  ),
+                  TextSpan(
+                    text: _meaning(rung),
+                    style: TextStyle(
+                        fontSize: 13.5, height: 1.55, color: kInkSoft),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class MyReportScreen extends StatefulWidget {
   const MyReportScreen({super.key});
 

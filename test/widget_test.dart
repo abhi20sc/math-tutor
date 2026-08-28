@@ -889,6 +889,106 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // The How to use page
+  // -------------------------------------------------------------------------
+  //
+  // It explains a rule the interface cannot state for itself, so the thing
+  // worth testing is that the explanation is GENERATED from the rule rather
+  // than written beside it. A help page that drifts is worse than none.
+  group('how to use', () {
+    // The page is a lazy ListView, so at the 800x600 default only its top
+    // is ever built and every one of these would pass or fail on where the
+    // fold happens rather than on what the page says. A viewport tall
+    // enough to hold the whole thing is the honest fixture.
+    Future<void> showWhole(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(900, 4200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(const MaterialApp(home: HowToUseScreen()));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('every rung of the ladder is explained, by name',
+        (tester) async {
+      await showWhole(tester);
+
+      for (final rung in Progress.values) {
+        expect(
+          find.textContaining(progressWord(rung), findRichText: true),
+          findsWidgets,
+          reason: 'no explanation for ${progressWord(rung)}',
+        );
+      }
+    });
+
+    testWidgets('it names the four sections', (tester) async {
+      await showWhole(tester);
+      for (final s in kSections) {
+        expect(find.text(s.$2), findsOneWidget);
+      }
+    });
+
+    testWidgets('and draws the SAME icon the app draws for each',
+        (tester) async {
+      // The bug this replaces: the page invented its own Test icon, so the
+      // help was teaching a symbol the interface never shows. Both now read
+      // kSections, and this is what says so.
+      await showWhole(tester);
+      for (final s in kSections) {
+        expect(find.byIcon(s.$3), findsWidgets,
+            reason: 'no ${s.$2} icon on the help page');
+      }
+    });
+
+    testWidgets('every section has an explanation', (tester) async {
+      // A section added to kSections without a line in _sectionHelp throws
+      // on the null assertion rather than rendering a blank row. Better to
+      // find that here than in front of a student.
+      await showWhole(tester);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('and both ways of looking at the course', (tester) async {
+      await showWhole(tester);
+      expect(find.text('Classroom'), findsOneWidget);
+      expect(find.text('Constellation'), findsOneWidget);
+    });
+
+    testWidgets('the section icons are the ONLY icons in the body',
+        (tester) async {
+      // Classroom and Constellation are picked from a segmented switch that
+      // has no icons, so the page must not invent two. Counting them is how
+      // that stays true: the four sections, and the mail icon on the
+      // Contact us button, and nothing else.
+      await showWhole(tester);
+      final icons = tester.widgetList<Icon>(find.byType(Icon)).toList();
+      final sectionIcons = kSections.map((s) => s.$3).toSet();
+      for (final i in icons) {
+        expect(
+          sectionIcons.contains(i.icon) ||
+              i.icon == Icons.mail_outline_rounded,
+          isTrue,
+          reason: 'unexpected icon on the help page: ${i.icon}',
+        );
+      }
+    });
+
+    testWidgets('it fits a phone without overflowing', (tester) async {
+      // 388 wide is the narrowest real phone this has to survive, and a
+      // previous dialog shipped broken at exactly this width.
+      tester.view.physicalSize = const Size(388, 780);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(const MaterialApp(home: HowToUseScreen()));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Crash reporting
   // -------------------------------------------------------------------------
   //
