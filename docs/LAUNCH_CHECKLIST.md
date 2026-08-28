@@ -213,7 +213,7 @@ Still worth doing before real money moves:
 ```bash
 flutter pub get
 flutter analyze          # expect zero issues
-flutter test             # expect 44 passing
+flutter test             # expect 75 passing
 flutter build web --release --no-web-resources-cdn --wasm
 python3 tools/precompress.py
 ```
