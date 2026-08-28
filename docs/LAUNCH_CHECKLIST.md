@@ -49,15 +49,21 @@ by trusting this list, and the ticks are what was actually found there:
 - [x] `supabase/migrations/my_progress.sql` — `my_progress`
 - [x] `supabase/migrations/student_safeguarding.sql` — `delete_my_account`
 - [x] `supabase/migrations/enrolment_links.sql` — `my_enrolment_link`
-- [ ] `supabase/migrations/reachable_pool.sql` — **the only one left.**
-      Without it the report has no coverage numbers, so nothing can reach
-      "Completed" and every subtopic tops out at "Nearly there".
+- [x] `supabase/migrations/reachable_pool.sql` — applied 29 August 2026
 - [x] `supabase/migrations/indexes_and_policy_perf.sql` — all five indexes
 
-Re-running `student_safeguarding.sql` is worth it anyway: two of its
-functions gained a fixed `search_path` after it was first applied. Nothing
-is exploitable either way — both return a constant and touch no table — it
-just clears two permanent warnings off Supabase's advisor list.
+**All seven are now applied.** `reachable_pool.sql` and the `search_path`
+fix from `student_safeguarding.sql` went on live on 29 August 2026, and
+were checked afterwards rather than trusted: 36 tags / 120 questions for a
+free MCV4U student, the smallest subtopic pool is 2, the student's door and
+the parent's door return the same total for the same student, and an
+unknown token returns nothing.
+
+One thing that check caught: `student_has_premium(uuid)` was anon-callable,
+because Postgres grants EXECUTE to PUBLIC by default and the file did not
+revoke it. Anybody could have asked whether a given student uuid was
+paying. Revoked on live and in the file. If you re-run the file, you get
+the revoke with it.
 
 **Do NOT re-run `astro_math_assist_setup.sql` or any question file.** They
 are already applied. Re-running the setup would drop and rebuild `questions`

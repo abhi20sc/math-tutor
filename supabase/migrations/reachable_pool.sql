@@ -73,6 +73,19 @@ as $$
   );
 $$;
 
+-- Callable by nothing outside the database. Postgres grants EXECUTE to
+-- PUBLIC by default, and left alone that means any anonymous caller can ask
+-- whether a given student uuid is paying. A uuid is not guessable, so it is
+-- a small leak rather than an open door, but it is an entirely unnecessary
+-- one: both callers below are SECURITY DEFINER and run as the owner, which
+-- does not need the grant.
+--
+-- This was missed on the first pass here and caught by listing the grants
+-- afterwards rather than assuming them. Worth doing every time — three
+-- functions in student_safeguarding.sql were anon-callable for the same
+-- reason, and nothing in the SQL looks wrong when it happens.
+revoke all on function student_has_premium(uuid) from public, anon, authenticated;
+
 -- The original, now deferring rather than deciding. Same answer, same
 -- callers, same grants — this is a redefinition, not a new function, so
 -- everything already calling has_premium() picks it up untouched.
