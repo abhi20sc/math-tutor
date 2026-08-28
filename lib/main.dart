@@ -4705,14 +4705,23 @@ class _HomePageState extends State<HomePage> {
     try {
       final profile =
           await withTimeout(_profiles.loadOrCreate(), 'Loading your profile');
-      final units = await withTimeout(
-          _questions.fetchUnits(profile.course), 'Loading your topics');
       // Before anything is drawn with it. A student who chose dark should
       // not see one frame of the light theme on every sign-in.
       kTheme.set(ThemeController.parse(profile.themePref));
 
-      final progress = await withTimeout(
-          _progress.fetchProgress(profile.course), 'Loading your progress');
+      // Units and progress both need the COURSE, and neither needs the
+      // other, so they go out together. In sequence they were two round
+      // trips stacked on top of the profile fetch — three waits before
+      // anything could be drawn, on a phone, on a school connection.
+      final core = await Future.wait([
+        withTimeout(_questions.fetchUnits(profile.course), 'Loading your topics')
+            .then<Object>((v) => v),
+        withTimeout(_progress.fetchProgress(profile.course),
+                'Loading your progress')
+            .then<Object>((v) => v),
+      ]);
+      final units = core[0] as List<UnitSummary>;
+      final progress = core[1] as Map<String, UnitProgress>;
 
       // Neither of these gates the app, so they go out TOGETHER rather
       // than one after the other, and neither is fatal. Run in sequence

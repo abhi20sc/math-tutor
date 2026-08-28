@@ -21,6 +21,18 @@
   <meta name="theme-color" content="#10141A" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
 
+  <!-- Warm the connections the app makes the moment it starts.
+       Supabase is hit on the very first frame (list_courses fills the
+       course picker) and fonts.gstatic serves the two fallback faces
+       CanvasKit asks for. Opening a TLS connection is a DNS lookup, a TCP
+       handshake and a TLS handshake, and on a phone on mobile data that is
+       most of a second before a single byte of response. Doing it in
+       parallel with the app download costs nothing and removes that wait
+       from the critical path.
+       preconnect rather than dns-prefetch: we know we will use both. -->
+  <link rel="preconnect" href="https://frkswzowskeqmgdrrwab.supabase.co" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
   <!-- iOS home-screen -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">

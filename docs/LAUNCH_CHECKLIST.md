@@ -161,7 +161,21 @@ flutter pub get
 flutter analyze          # expect zero issues
 flutter test             # expect 44 passing
 flutter build web --release --no-web-resources-cdn --wasm
+python3 tools/precompress.py
 ```
+
+**Both lines, in that order.** The second one brotli-11s the two big wasm
+files and writes the `Content-Encoding: br` header that goes with them.
+Cloudflare compresses on the fly, which means compressing for speed rather
+than size: measured on this site its brotli left 231 KB on the table on one
+file. Doing it once at build time saves about 575 KB on every cold load and
+costs nothing at runtime.
+
+Skipping the second line is safe — you get a slower site, not a broken one.
+The header is written by the script, so it only exists when the compression
+did. That is deliberate: keeping it in `web/_headers` would have shipped a
+brotli claim on raw files any time somebody forgot, and a raw wasm file
+served as brotli is a white screen.
 
 Then upload `build/web` to Cloudflare Pages — either drag it in the
 dashboard, or `npx wrangler pages deploy build/web`.

@@ -33,6 +33,15 @@
 /manifest.json
   Cache-Control: public, max-age=0, must-revalidate
 
+# NOTE: tools/precompress.py APPENDS a block to build/web/_headers declaring
+# Content-Encoding: br for the wasm files it compresses. That block is
+# deliberately not written here.
+#
+# If it lived in this file it would ship on every build, including builds
+# where the compression step was skipped — and a raw wasm file served with
+# Content-Encoding: br is a white screen. Generating the header from the
+# same step that does the compressing means the two cannot disagree.
+
 # Figures are content-addressed by name and are regenerated under new names
 # when they change, so they can be cached hard.
 /figures/*
