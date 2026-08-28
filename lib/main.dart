@@ -249,7 +249,9 @@ class _SubjectChip extends StatelessWidget {
                       ),
                     ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(9, 6, 10, 6),
+              // Symmetric. It was 9 against 10, which is not a centring
+              // rule, it is a number somebody typed.
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -263,8 +265,14 @@ class _SubjectChip extends StatelessWidget {
                   const SizedBox(width: 5),
                   Text(
                     subject.label,
+                    // Same reason as the Open pill: a label this size next
+                    // to a glyph sits a hair high, because the text box is
+                    // taller than its ink and the icon's is not.
+                    strutStyle:
+                        const StrutStyle(forceStrutHeight: true, height: 1),
                     style: TextStyle(
                       fontSize: 11.5,
+                      height: 1,
                       fontWeight: FontWeight.w700,
                       color: on ? kOnAccent : kInkSoft,
                     ),
@@ -5692,7 +5700,16 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                const SubjectSwitcher(),
+                // Pulled 10px left, out of the header's own padding, so the
+                // chips line up with the rail links below rather than
+                // sitting proud of them. The header insets its content by
+                // 20; a _RailLink's pill starts at 10. Without this the
+                // subject row is the only thing in the sidebar that does
+                // not share an edge with everything under it.
+                Transform.translate(
+                  offset: const Offset(-10, 0),
+                  child: const SubjectSwitcher(),
+                ),
                 const SizedBox(height: 3),
                 Text(
                   // The class count stays on the front surface here for the
