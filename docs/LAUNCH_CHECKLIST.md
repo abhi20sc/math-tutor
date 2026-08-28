@@ -353,11 +353,35 @@ The things that have never been tested end to end on hardware.
 
 ## 7. Not blocking, but true
 
-- The Astro+ enrolment flow has six working server functions and no
-  interface. A parent cannot currently be sent a payment link by the app.
-- The guardian consent link is handed to the student to pass on, because
-  the app cannot send email. It works; it is not what you would want.
+- **Email sending is best-effort, by design.** `send-link` posts the
+  consent and payment links from the server, but `trySendLink` swallows
+  every failure — not deployed, not configured, rate limited, offline —
+  and the screen falls back to showing the link for the student to pass on
+  by hand. That fallback is the reason the flow cannot break; it is also
+  the reason a silently undeployed function looks exactly like a working
+  one. If you want to know whether mail is actually going out, send
+  yourself a consent link and watch for it, rather than trusting the
+  absence of an error.
+- **No email means no account lockout and no crash reports.** Both are in
+  section 6, and both stay true: `send-link` sends two specific links from
+  a template, it is not a general mail path.
 - `purge_rate_limits` is not scheduled. Run it by hand occasionally, or
   leave it — the table is small.
-- `lib/main.dart` is 16,000 lines, and that is the only real lever left on
-  the 1,056 KB payload.
+- **The cold load is 2,109 KB and `lib/main.dart` is 19,905 lines.** The
+  file size is now the only real lever left: 909 KB of that payload is the
+  app itself, and deferred loading is the tool for it. dart2wasm's deferred
+  loading is main-channel and experimental, so this waits for it to reach
+  stable rather than moving the whole build off `--wasm` to get it.
+
+## 8. Known, and not fixed
+
+- **The report not scrolling.** QA saw it once, on a phone, and I have not
+  reproduced it: a fixture built in exactly the real
+  `Center`/`ConstrainedBox`/`SingleChildScrollView` scrolls, with and
+  without a history marker on top. QA also saw 20–40 second transitions in
+  the same session, and the timeouts and the smaller payload should have
+  moved those, so this needs a re-test on the current build before it is
+  worth chasing further. If it happens again, the thing to note is whether
+  it is stuck or merely slow.
+- **Mindmap nodes overlapping mid-animation.** Transient, only while the
+  fan is opening, settles correctly. Cosmetic.
