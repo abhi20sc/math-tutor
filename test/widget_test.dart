@@ -678,6 +678,75 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // Back
+  // -------------------------------------------------------------------------
+  //
+  // The app moves between screens with setState, which the browser's Back
+  // button knows nothing about — so Back used to leave the site entirely.
+  // HistoryMarkerRoute gives the Navigator stack depth without putting
+  // anything on screen. Two properties make or break it, and both are
+  // testable without an account.
+  group('the history marker', () {
+    testWidgets('shows nothing and blocks nothing', (tester) async {
+      var tapsUnderneath = 0;
+      late BuildContext ctx;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(builder: (context) {
+          ctx = context;
+          return Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => tapsUnderneath++,
+                child: const Text('underneath'),
+              ),
+            ),
+          );
+        }),
+      ));
+
+      await tester.tap(find.text('underneath'));
+      expect(tapsUnderneath, 1);
+
+      Navigator.of(ctx).push(HistoryMarkerRoute<void>());
+      await tester.pumpAndSettle();
+
+      // Still visible: the marker is not opaque, so the screen it was
+      // pushed over is still the screen.
+      expect(find.text('underneath'), findsOneWidget);
+
+      // Still tappable: an invisible route that ate every tap would be a
+      // far worse bug than the one it fixes.
+      await tester.tap(find.text('underneath'));
+      expect(tapsUnderneath, 2,
+          reason: 'the marker swallowed a tap meant for the app');
+    });
+
+    testWidgets('popping it runs the step-back', (tester) async {
+      var steppedBack = false;
+      late BuildContext ctx;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(builder: (context) {
+          ctx = context;
+          return const Scaffold(body: SizedBox.shrink());
+        }),
+      ));
+
+      Navigator.of(ctx)
+          .push(HistoryMarkerRoute<void>())
+          .then((_) => steppedBack = true);
+      await tester.pumpAndSettle();
+      expect(steppedBack, isFalse);
+
+      // What the browser's Back button does.
+      Navigator.of(ctx).pop();
+      await tester.pumpAndSettle();
+      expect(steppedBack, isTrue);
+    });
+  });
+
   testWidgets('an unopened subject says so rather than doing nothing',
       (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(

@@ -59,6 +59,8 @@
 //       it stays that way.
 //     * password reset exists. See ResetPasswordScreen.
 
+// TimeoutException, for the network deadline.
+import 'dart:async';
 // JsonEncoder, for the data export.
 import 'dart:convert';
 // Trigonometry, for the mindmap's leaf fan.
@@ -2000,6 +2002,82 @@ class _GuardianConsentLandingScreenState
     );
   }
 }
+
+/// An invisible route whose only job is to give Back something to pop.
+///
+/// THE PROBLEM
+///
+/// This app moves between screens with setState, not with routes. That is
+/// fine inside the app and invisible to Flutter, but the browser's Back
+/// button does not know about setState — it only knows about the
+/// Navigator's stack. With one route on that stack, Back leaves the site
+/// entirely, so a student who opens a topic and presses Back lands on
+/// whatever they were looking at before Astro, which is usually Google.
+/// Sign-in through to answering a question was one page as far as the
+/// browser was concerned.
+///
+/// WHAT THIS IS
+///
+/// A route that renders nothing and blocks nothing. `opaque: false` keeps
+/// the screen underneath visible; `IgnorePointer` over an empty box means
+/// it cannot swallow a tap. It exists purely so the stack has depth, and
+/// popping it is what tells the app to step back.
+///
+/// WHAT COUNTS AS A PAGE, AND WHY
+///
+/// Back unwinds PLACE, not MODE. A level, a unit, the profile pane and the
+/// constellation each push one of these, because each is somewhere you
+/// went. The Learn / Quiz / Improve / Test tabs do not, because they are
+/// how you are working on the place you are already in — and because four
+/// tabs generating four history entries makes Back useless for getting
+/// anywhere.
+/// OverlayRoute, NOT PageRoute, and that distinction is the whole thing.
+///
+/// The first version of this was a PageRouteBuilder with `opaque: false`
+/// and an IgnorePointer, which looked right and was not: every PageRoute is
+/// a ModalRoute, and a ModalRoute inserts a ModalBarrier whether or not it
+/// has a barrier colour. The barrier is invisible and still eats every tap
+/// underneath it. The app would have looked completely dead — a far worse
+/// bug than the one this fixes — and the test below is what caught it.
+///
+/// OverlayRoute has no barrier. It contributes an overlay entry and
+/// nothing else, which is exactly the amount of route needed to give Back
+/// something to pop.
+class HistoryMarkerRoute<T> extends OverlayRoute<T> {
+  @override
+  Iterable<OverlayEntry> createOverlayEntries() sync* {
+    yield OverlayEntry(
+      builder: (_) => const IgnorePointer(child: SizedBox.shrink()),
+      // The screen below is the real one: it stays visible and keeps its
+      // state.
+      opaque: false,
+      maintainState: true,
+    );
+  }
+}
+
+/// How long any one network call gets before the app gives up on it.
+///
+/// There was no timeout anywhere in this file, and that is what "I have to
+/// refresh for it to load" actually is: a request that never returns leaves
+/// a spinner on screen for ever, because a Future that does not complete
+/// does not throw either. The student sees a working-looking app that is
+/// waiting on something already dead, and reloading is the only way out —
+/// which is exactly what they end up doing.
+///
+/// Twelve seconds is long enough for a slow school connection to finish a
+/// real request and short enough that nobody sits through it twice.
+const Duration kNetworkTimeout = Duration(seconds: 12);
+
+/// Gives a Future a deadline, and a message worth reading when it passes.
+///
+/// The message names WHAT was being fetched, because "something went wrong"
+/// tells a student nothing and tells a tutor less.
+Future<T> withTimeout<T>(Future<T> future, String what) => future.timeout(
+      kNetworkTimeout,
+      onTimeout: () => throw TimeoutException(
+          '$what took too long. Check your connection and try again.'),
+    );
 
 /// Where a student's account stands on age and guardian consent.
 class ConsentStatus {
@@ -4625,22 +4703,31 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      final profile = await _profiles.loadOrCreate();
-      final units = await _questions.fetchUnits(profile.course);
+      final profile =
+          await withTimeout(_profiles.loadOrCreate(), 'Loading your profile');
+      final units = await withTimeout(
+          _questions.fetchUnits(profile.course), 'Loading your topics');
       // Before anything is drawn with it. A student who chose dark should
       // not see one frame of the light theme on every sign-in.
       kTheme.set(ThemeController.parse(profile.themePref));
 
-      final progress = await _progress.fetchProgress(profile.course);
-      // Not fatal if either fails — the quiz still works without them.
-      var classes = <StudentClass>[];
-      try {
-        classes = await _classes.myClassesAsStudent();
-      } catch (_) {}
-      var notes = <TutorNote>[];
-      try {
-        notes = await _classes.myTutorNotes();
-      } catch (_) {}
+      final progress = await withTimeout(
+          _progress.fetchProgress(profile.course), 'Loading your progress');
+
+      // Neither of these gates the app, so they go out TOGETHER rather
+      // than one after the other, and neither is fatal. Run in sequence
+      // they added two more round trips to a cold start on a phone, for
+      // information nobody needs in order to answer a question.
+      final extras = await Future.wait([
+        withTimeout(_classes.myClassesAsStudent(), 'Loading your classes')
+            .then<Object>((v) => v)
+            .catchError((_) => <StudentClass>[] as Object),
+        withTimeout(_classes.myTutorNotes(), 'Loading your feedback')
+            .then<Object>((v) => v)
+            .catchError((_) => <TutorNote>[] as Object),
+      ]);
+      final classes = extras[0] as List<StudentClass>;
+      final notes = extras[1] as List<TutorNote>;
 
       if (!mounted) return;
       setState(() {
@@ -4677,6 +4764,19 @@ class _HomePageState extends State<HomePage> {
   /// where the free/paid line runs, so it has to be a real place in the app
   /// rather than a filter.
   Future<void> _selectUnit(String unit) async {
+    // Opening a topic is going somewhere, so Back should come out of it.
+    // Only the FIRST one records a step: switching from one topic to
+    // another is moving sideways, and stacking those would make Back walk
+    // the student through every topic they had glanced at.
+    if (_selectedUnit == null) {
+      _pushHistory(() => setState(() {
+            _selectedUnit = null;
+            _selectedLevel = null;
+            _levels = [];
+            _resetProgress();
+          }));
+    }
+
     // Choosing a topic while Learn is open should show that topic's
     // lessons, not leave the previous unit's list sitting there.
     if (_section == 'learn') _loadLessons(unit);
@@ -4718,6 +4818,11 @@ class _HomePageState extends State<HomePage> {
       await _offerAstroPlus();
       return;
     }
+
+    _pushHistory(() => setState(() {
+          _selectedLevel = null;
+          _resetProgress();
+        }));
 
     setState(() {
       _selectedLevel = level.level;
@@ -5225,12 +5330,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _backToUnits() {
-    setState(() {
-      _selectedUnit = null;
-      _selectedLevel = null;
-      _levels = [];
-      _resetProgress();
-    });
+    // Through the Navigator, so the browser's history unwinds with the
+    // app's. Reverting state alone would leave a marker on the stack and
+    // the next Back would replay a step the student had already taken.
+    _popHistory(() => setState(() {
+          _selectedUnit = null;
+          _selectedLevel = null;
+          _levels = [];
+          _resetProgress();
+        }));
   }
 
   /// From the quiz or the results back to the four levels, with the medals
@@ -5247,6 +5355,33 @@ class _HomePageState extends State<HomePage> {
 
   // Which pane the sidebar has open on a wide screen: the topics/practice
   // flow, or the profile. Phones never see this — they keep the AccountBar.
+  /// How many history markers this screen has on the Navigator.
+  ///
+  /// Tracked so the app's own Back affordances pop the route rather than
+  /// only reverting state — otherwise the browser stack keeps growing and
+  /// Back starts replaying steps the student already undid.
+  int _historyDepth = 0;
+
+  /// Records a step, so Back can undo it.
+  void _pushHistory(VoidCallback onBack) {
+    _historyDepth++;
+    Navigator.of(context).push(HistoryMarkerRoute<void>()).then((_) {
+      _historyDepth = _historyDepth > 0 ? _historyDepth - 1 : 0;
+      if (mounted) onBack();
+    });
+  }
+
+  /// Steps back, from a button in the app rather than from the browser.
+  /// Falls back to plain state when there is no marker to pop, which
+  /// happens on the very first screen.
+  void _popHistory(VoidCallback fallback) {
+    if (_historyDepth > 0) {
+      Navigator.of(context).pop();
+    } else {
+      fallback();
+    }
+  }
+
   String _railView = 'topics';
   bool _wideLayout = false;
 
@@ -5309,6 +5444,12 @@ class _HomePageState extends State<HomePage> {
       );
 
   void _showTopicView(String view) {
+    // Only opening the constellation records a step. Coming back to the
+    // classroom IS the step back, and pushing one for it too would mean
+    // Back toggled between the two for ever instead of leaving.
+    if (view == 'map' && _topicView != 'map') {
+      _pushHistory(() => setState(() => _topicView = 'classroom'));
+    }
     setState(() => _topicView = view);
     if (view == 'map') _loadMap();
   }
@@ -5405,7 +5546,13 @@ class _HomePageState extends State<HomePage> {
           builder: (context, constraints) {
             _wideLayout = constraints.maxWidth >= 980;
             if (!_wideLayout) {
-              if (_topicView == 'map' && _selectedUnit == null) {
+              // No `&& _selectedUnit == null` here, and that was the bug:
+              // on a phone the switch is in the content, so by the time a
+              // student taps Constellation they have almost always opened
+              // a topic. The guard meant the tap set the state and drew
+              // nothing, which is indistinguishable from the button being
+              // broken.
+              if (_topicView == 'map') {
                 return Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -5753,7 +5900,10 @@ class _HomePageState extends State<HomePage> {
             icon: Icons.person_rounded,
             label: 'Profile and Preferences',
             selected: _railView == 'profile',
-            onTap: () => setState(() => _railView = 'profile'),
+            onTap: () {
+              _pushHistory(() => setState(() => _railView = 'topics'));
+              setState(() => _railView = 'profile');
+            },
             // Their own face (or initials) instead of a generic person icon.
             leading: PersonAvatar(
               name: _profile?.displayName ?? '',
@@ -6120,6 +6270,29 @@ class _HomePageState extends State<HomePage> {
                 child: const Text('Reset my progress')),
           ),
         ]),
+        // Getting hold of a person, in the pane a student goes to when
+        // something is wrong. The footer strip carries it too, but nobody
+        // scrolls to a footer looking for help.
+        card([
+          Text('Something wrong?',
+              style: TextStyle(
+                  fontSize: 14.5, fontWeight: FontWeight.w600, color: kInk)),
+          const SizedBox(height: 4),
+          Text(
+            'A broken question, a payment problem, anything at all. A person '
+            'reads the inbox.',
+            style: TextStyle(fontSize: 12.5, height: 1.5, color: kInkSoft),
+          ),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => showContactSheet(context),
+              child: const Text('Contact us'),
+            ),
+          ),
+        ]),
+
         // Your data. Two rights, and they are rights rather than settings,
         // so they sit in their own card and not in a menu.
         card([
@@ -14833,12 +15006,117 @@ class TestScore {
 /// rendered HTML — tools/render_legal.py turns docs/PRIVACY.md and
 /// docs/TERMS.md into web/privacy.html and web/terms.html, so there is one
 /// copy of each and it is the one under version control.
+/// Getting hold of a person.
+///
+/// A sheet rather than a page, and a mailto rather than a form. A form
+/// needs somewhere to put what it collects, which for this app means a
+/// table holding messages from children — a new place to store their words
+/// and their problems, with its own retention question and its own row in
+/// the privacy policy. A mailto puts the message in the sender's own outbox
+/// and delivers it to an inbox a person already reads.
+///
+/// The address is the same one named in the privacy policy as the route for
+/// deletion and access requests. One address, one inbox, one promise.
+Future<void> showContactSheet(BuildContext context) {
+  const address = 'stemlabs.ca@gmail.com';
+
+  Future<void> mail(String subject) async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: address,
+      // Uri does the percent-encoding, which matters: a subject with a
+      // space or an apostrophe hand-pasted into a mailto silently
+      // truncates the link in some clients.
+      query: Uri(queryParameters: {'subject': subject}).query,
+    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  return showDialog<void>(
+    context: context,
+    builder: (_) => AlertDialog(
+      backgroundColor: kCard,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Contact us', style: TextStyle(fontSize: 18)),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'A person reads this inbox. Pick whichever is closest and it '
+              'will open your email app with the subject filled in.',
+              style: TextStyle(fontSize: 13.5, height: 1.55, color: kInkSoft),
+            ),
+            const SizedBox(height: 16),
+            for (final reason in const [
+              ('Something is broken', 'Astro STEM Labs - something is broken',
+               Icons.bug_report_rounded),
+              ('A question looks wrong', 'Astro STEM Labs - question problem',
+               Icons.help_outline_rounded),
+              ('Astro+, payments or billing', 'Astro STEM Labs - Astro+',
+               Icons.payments_rounded),
+              ('My data, or deleting my account',
+               'Astro STEM Labs - my data', Icons.shield_outlined),
+              ('Something else', 'Astro STEM Labs', Icons.mail_outline_rounded),
+            ])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Material(
+                  color: kTrack,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      mail(reason.$2);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+                      child: Row(
+                        children: [
+                          Icon(reason.$3, size: 18, color: kInkSoft),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Text(reason.$1,
+                                style:
+                                    TextStyle(fontSize: 13.5, color: kInk)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 6),
+            // Shown in full and selectable, because a student on a device
+            // with no mail app set up still needs to be able to reach us.
+            Text('Or write to us directly:',
+                style: TextStyle(fontSize: 12.5, color: kInkSoft)),
+            const SizedBox(height: 4),
+            SelectableText(address,
+                style: TextStyle(
+                    fontSize: 13.5, fontWeight: FontWeight.w600, color: kInk)),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
+}
+
 class LegalLinks extends StatelessWidget {
   const LegalLinks({super.key});
 
   Future<void> _open(String page) async {
-    // Relative to wherever the app is served, so this works on the
-    // Netlify site and on a local build without knowing either URL.
+    // Relative to wherever the app is served, so this works on Cloudflare
+    // Pages and on a local build without knowing either URL.
     final uri = Uri.base.resolve(page);
     await launchUrl(uri, webOnlyWindowName: '_blank');
   }
@@ -14859,6 +15137,12 @@ class LegalLinks extends StatelessWidget {
           onPressed: () => _open('terms.html'),
           style: TextButton.styleFrom(foregroundColor: kInkSoft),
           child: Text('Terms', style: style),
+        ),
+        Text('\u00b7', style: style),
+        TextButton(
+          onPressed: () => showContactSheet(context),
+          style: TextButton.styleFrom(foregroundColor: kInkSoft),
+          child: Text('Contact', style: style),
         ),
       ],
     );
