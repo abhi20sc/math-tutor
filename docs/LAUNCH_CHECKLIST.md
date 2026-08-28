@@ -84,30 +84,51 @@ them and why they are the ones most often forgotten.
 - [ ] **Authentication → minimum password length: 8.** The app enforces 8;
       the server should agree rather than being two rules that can drift.
 - [ ] **Authentication → URL Configuration → Redirect URLs:** add the
-      Netlify URL. Without it the password-reset link goes nowhere.
+      Cloudflare Pages URL. Without it the password-reset link goes
+      nowhere.
 - [ ] **The admin account:** a unique strong password, and MFA if Supabase
       offers it on your plan. That account can read every student's work.
 
 ---
 
-## 3. Stripe, before any real money
+## 3. Stripe
 
-- [ ] Swap `sk_test_` for `sk_live_`
-- [ ] Create the two live prices — monthly $10, annual $100 CAD
-- [ ] Set `STRIPE_PRICE_ID_MONTHLY` and `STRIPE_PRICE_ID_ANNUAL`
-- [ ] Add the live webhook endpoint and set `STRIPE_WEBHOOK_SECRET`
-- [ ] **Set `SITE_URL`** to the real Netlify origin, with no trailing slash.
-      This is new and it is not optional any more: CORS on `create-checkout`
-      is locked to it. Unset, it falls back to a placeholder that matches no
-      real origin, and the browser will refuse every response — which is the
-      correct failure, but it is still a failure.
-- [ ] Redeploy **both** functions:
+The keys, prices and webhook are already connected. Two things here are
+still outstanding, and both exist because the code changed under them.
+
+- [ ] **Set `SITE_URL`** to the Cloudflare Pages origin, no trailing slash.
+
+      This is new. CORS on `create-checkout` used to be `'*'` — any page on
+      the internet could call your payment endpoint — and is now locked to
+      `SITE_URL`. If it is unset the fallback is `https://unset.invalid`,
+      which matches no real origin, so the browser refuses every response.
+      That is the correct failure rather than a silent hole, but it is
+      still a failure, and it is the one that will look like "Astro+ is
+      broken" if this step is skipped.
+
+      It also has to be the CLOUDFLARE origin now, not whatever it pointed
+      at before.
+
+- [ ] **Redeploy both functions.** Not optional even with keys set: the
+      CORS change is in `create-checkout`'s source and does nothing until
+      it is deployed.
+
       ```bash
       supabase functions deploy create-checkout
       supabase functions deploy stripe-webhook --no-verify-jwt
       ```
-      `--no-verify-jwt` on the webhook is required: Stripe is not a signed-in
-      user. The signature check inside the function is what replaces it.
+
+      `--no-verify-jwt` on the webhook is required: Stripe is not a
+      signed-in user. The signature check inside the function replaces it,
+      and it is a real one — HMAC, a five-minute timestamp tolerance and a
+      constant-time compare.
+
+Already done, so nothing to do:
+
+- Live keys, the two live prices, and `STRIPE_WEBHOOK_SECRET`
+
+Still worth doing before real money moves:
+
 - [ ] Put one real card through the whole loop, then refund it
 - [ ] Interac: turn **auto-deposit ON** for stemlabs.ca@gmail.com, so no
       security answers travel by text message
@@ -116,47 +137,89 @@ them and why they are the ones most often forgotten.
 
 ---
 
-## 4. Build and deploy
+## 4. Build and deploy — Cloudflare Pages
 
 ```bash
 flutter pub get
 flutter analyze          # expect zero issues
 flutter test             # expect 44 passing
 flutter build web --release --no-web-resources-cdn
-# then drag build/web onto Netlify
 ```
 
-**`--no-web-resources-cdn` is not optional, and it is not about speed.**
-Without it the browser fetches Flutter's rendering engine — 2.1 MB — from
-`gstatic.com`, which means every student's browser contacts Google on every
-cold load. With it, the engine is served from your own Netlify origin,
-where the `_headers` file already caches it for a year.
+Then upload `build/web` to Cloudflare Pages — either drag it in the
+dashboard, or `npx wrangler pages deploy build/web`.
 
-Measured, both ways, on a cold load: the bytes are the same. What changes
-is who sees the request. For an app used by children that is worth the
-flag.
+### The one that would break everything
 
-It does not remove Google entirely — `fonts.gstatic.com` is still contacted
-for two fallback font files that the framework loads to draw text, and
-there is no supported way to stop that short of bundling fonts. Google is
-named in the privacy policy for exactly that reason.
+**`web/_redirects` must NOT contain the single-page-app catch-all.** It
+used to, and on Netlify that was correct:
 
-**You need about 2 GB free to build.** The disk was at 316 MB when this was
-last checked and the build failed outright. `flutter clean` and emptying
-`~/Library/Developer/Xcode/DerivedData` are the usual two.
+```
+/*    /index.html   200
+```
 
-- [ ] Confirm `build/web` contains `_headers` and `_redirects`. They live in
-      `web/` and are copied by the build. Without `_redirects` every shared
-      link and every reload 404s; without `_headers` there are no security
-      headers at all.
+On Cloudflare Pages that line breaks the entire app. Netlify serves a
+matching static asset first and only falls through to the redirect when
+nothing matched. Cloudflare applies redirects **before** looking for an
+asset, and its own documentation says they are *"always followed,
+regardless of whether or not an asset matches the incoming request"*. So
+that rule rewrites `main.dart.js`, `canvaskit.wasm` and all 376 figures to
+`index.html`, and the app never starts — failing in a way that looks like a
+broken build rather than a routing rule.
+
+The line is already removed. The file is kept, with the explanation in it,
+so nobody puts it back.
+
+**Nothing replaces it, and nothing needed to.** This app has no path
+routing. Every link it makes is a query string on the root —
+`/?report=<token>`, `/?consent=<token>`, `/?pay=<token>` — read with
+`Uri.base.queryParameters` and nothing else. A query string never reaches
+the server as a path, so those links were always going to be served
+`index.html` by any host. The catch-all was defensive, not load-bearing.
+
+Cloudflare covers path routes anyway: a project with no top-level
+`404.html` is treated as a single-page app. That is belt-and-braces here
+rather than the thing holding the links up.
+
+Verified on the built output: `main.dart.js` serves as 3.7 MB of
+JavaScript, `canvaskit.js` as JavaScript, and all three deep links return
+the app's HTML.
+
+- [ ] **Do not add a `web/404.html`.** The moment a top-level 404.html
+      exists, Cloudflare stops assuming this is an SPA and every deep link
+      404s. A custom 404 page is the one obvious improvement that would
+      silently break link sharing.
+
+### The rest
+
+- [ ] Confirm `build/web/_headers` is there. Cloudflare reads it with the
+      same syntax as Netlify — checked against their limits: 8 rule blocks
+      against a maximum of 100, longest line 102 characters against a
+      maximum of 2,000.
 - [ ] Confirm `web/figures/` shipped — 376 PNGs. Missing figures make
       questions reference invisible diagrams, with no error.
 - [ ] After deploying, **close the tab completely and reopen it.** Flutter's
       service worker serves the old app for a load or two otherwise, and
       "I deployed but nothing changed" is almost always this.
 
+**`--no-web-resources-cdn` is not optional, and it is not about speed.**
+Without it the browser fetches Flutter's rendering engine — 2.1 MB — from
+`gstatic.com`, which means every student's browser contacts Google on every
+cold load. With it, the engine is served from your own origin, where the
+`_headers` file caches it for a year.
+
+Measured, both ways, on a cold load: the bytes are the same. What changes is
+who sees the request. For an app used by children that is worth the flag.
+
+It does not remove Google entirely — `fonts.gstatic.com` is still contacted
+for two fallback font files the framework loads to draw text, and there is
+no supported way to stop that short of bundling fonts. Google is named in
+the privacy policy for exactly that reason.
+
 Do not use `--wasm`. It was measured: 1,156 KB gzipped against 1,056 KB for
 the normal build. It is worse.
+
+**You need about 2 GB free to build.**
 
 ---
 

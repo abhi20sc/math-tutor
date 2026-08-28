@@ -1,8 +1,51 @@
-# A single-page app: every path has to reach index.html and let the app route
-# it, or a reloaded page and every shared link 404s. The share link
-# (/#/r/<token>) is the one that matters most — a parent following it is the
-# least likely person to work out that the URL was fine and the host was not.
+# Deliberately empty of rules. Read this before adding one.
 #
-# 200 rather than 301: rewrite, do not redirect, so the address bar keeps the
-# path the app is about to read.
-/*    /index.html   200
+# This file used to contain the standard single-page-app catch-all:
+#
+#     /*    /index.html   200
+#
+# That is correct on Netlify and it BREAKS THE ENTIRE APP on Cloudflare
+# Pages, which is where this now deploys.
+#
+# The difference is the order. Netlify serves a matching static asset first
+# and only falls through to the redirect when nothing matched. Cloudflare
+# applies redirects BEFORE looking for an asset, and its own documentation
+# is explicit that they are "always followed, regardless of whether or not
+# an asset matches the incoming request".
+#
+# So on Cloudflare that one line rewrites main.dart.js, canvaskit.wasm and
+# all 376 figures to index.html. The page loads, the browser asks for the
+# app, gets a copy of the HTML back, and nothing runs. It fails in a way
+# that looks like a broken build rather than a routing rule.
+#
+# WHAT REPLACES IT
+#
+# Nothing, and it turns out nothing needed to.
+#
+# This app has no path routing at all. Every link it produces is a query
+# string on the root — /?report=<token>, /?consent=<token>, /?pay=<token> —
+# and lib/main.dart reads them with Uri.base.queryParameters and nothing
+# else. There is no router, no onGenerateRoute, no path a browser could ask
+# for that is not either the root or a real file.
+#
+# A query string never reaches the server as a path. /?consent=abc is a
+# request for / with a query attached, so it was always going to be served
+# index.html by any host on earth. The catch-all was defensive rather than
+# load-bearing, which is why removing it costs nothing.
+#
+# Cloudflare Pages would cover a path route anyway: a project with no
+# top-level 404.html is treated as a single-page app and unmatched paths
+# get index.html. That is now belt-and-braces rather than the thing holding
+# the links up.
+#
+# THE TRAP THAT TURNS IT OFF
+#
+# Adding web/404.html. The moment a top-level 404.html exists, Cloudflare
+# stops assuming this is an SPA and starts serving that file for unmatched
+# paths instead — and every deep link 404s. A custom 404 page is the one
+# obvious improvement that would silently break sharing.
+#
+# If this ever moves back to Netlify, put the line at the top back.
+#
+# https://developers.cloudflare.com/pages/configuration/serving-pages/
+# https://developers.cloudflare.com/pages/configuration/redirects/

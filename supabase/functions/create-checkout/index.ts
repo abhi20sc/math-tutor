@@ -57,7 +57,7 @@ const PRICES: Record<string, string | undefined> = {
     Deno.env.get('STRIPE_PRICE_ID'),
   annual: Deno.env.get('STRIPE_PRICE_ID_ANNUAL'),
 };
-const SITE = (Deno.env.get('SITE_URL') ?? 'https://example.netlify.app')
+const SITE = (Deno.env.get('SITE_URL') ?? 'https://unset.invalid')
   .replace(/\/+$/, '');
 
 const admin = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -72,10 +72,15 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 // not a sentence worth defending when one line fixes it.
 //
 // SITE_URL already exists and is already required for the success and
-// cancel URLs, so there is no new secret to set. If it is unset, SITE falls
-// back to a placeholder that will not match any real origin, which fails
-// CLOSED — the browser refuses the response rather than the function
-// admitting everybody.
+// cancel URLs, so there is no new secret to set — but it now has to be the
+// CLOUDFLARE PAGES origin rather than whatever it was pointing at.
+//
+// If it is unset the fallback is https://unset.invalid, which is not a
+// resolvable host and matches no real origin, so this fails CLOSED: the
+// browser refuses the response rather than the function admitting
+// everybody. .invalid is reserved by RFC 2606 for exactly this, which is
+// why it is used instead of a plausible-looking example domain somebody
+// might one day register.
 const CORS = {
   'Access-Control-Allow-Origin': SITE,
   'Access-Control-Allow-Headers':

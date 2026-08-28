@@ -47,7 +47,7 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_KEY = Deno.env.get('RESEND_API_KEY');
 const FROM = Deno.env.get('REPORT_FROM') ??
   'Astro STEM Labs <onboarding@resend.dev>';
-const SITE = (Deno.env.get('SITE_URL') ?? 'https://example.netlify.app')
+const SITE = (Deno.env.get('SITE_URL') ?? 'https://unset.invalid')
   .replace(/\/+$/, '');
 
 // Locked to the app's own origin, like create-checkout. Never '*'.

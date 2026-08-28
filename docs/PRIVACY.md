@@ -119,7 +119,7 @@ We think the absences matter as much as the list above:
 | Where | What is there | Country |
 |---|---|---|
 | Supabase (Amazon `ca-central-1`) | The database and your profile photo | **Canada** |
-| Netlify | The app's own files — HTML, images, code | Served worldwide; **contains no personal data** |
+| Cloudflare Pages | The app's own files — HTML, images, code | Served worldwide; **contains no personal data** |
 | Google Fonts (fonts.gstatic.com) | Nothing we send. Your browser fetches two font files from Google to draw text, and Google sees that request — your IP address and which font | Worldwide. We do not choose this: it is how the framework the app is built on renders text, and we have removed every other Google request we could |
 | Stripe | Payment records | Ireland and the United States |
 | Our email provider | The single message sent to a parent about payment | Canada or the United States |
