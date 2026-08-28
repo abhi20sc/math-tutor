@@ -5549,6 +5549,8 @@ class _HomePageState extends State<HomePage> {
       builder: (context, box) => _MindMap(
         units: data.units,
         centreLabel: _profile?.courseLabel ?? 'My course',
+        scores: data.testScores,
+        reachable: data.reachable,
         height: box.maxHeight,
         // Nothing to scroll past here, so nothing to trap. The scrim exists
         // for the report, where the map sits inside a scrolling page.
@@ -17070,7 +17072,30 @@ enum Progress {
 }
 
 /// Too thin a sample to score. Two answers is not a percentage.
+///
+/// Unless two is all there is — see [looksNeededToScore].
 const int kMinLooksToScore = 3;
+
+/// How many first looks this subtopic needs before a percentage means
+/// anything: three, OR the whole pool if the pool is smaller than three.
+///
+/// The second half is not a nicety, it is a bug fix found by counting the
+/// real bank. Free accounts see Easy and Medium only, and 26 subtopics
+/// across the six courses have exactly TWO questions at those levels. A
+/// flat three-look guard makes those 26 permanently unscoreable for anyone
+/// who has not paid: the student answers everything they are allowed to
+/// answer and the row still reads "Just started", with nothing on the
+/// screen to explain why and no action that would ever change it.
+///
+/// The guard exists to reject a thin SAMPLE of a pool. Two answers out of
+/// seven is a thin sample. Two answers out of two is the whole pool, which
+/// is the strongest evidence that subtopic can produce, not the weakest.
+/// A pool that small scores coarsely — one slip is 50% — and that is an
+/// honest limit of two questions rather than something to paper over.
+int looksNeededToScore(int? reachable) =>
+    (reachable != null && reachable > 0 && reachable < kMinLooksToScore)
+        ? reachable
+        : kMinLooksToScore;
 
 /// Bands one subtopic.
 ///
@@ -17085,7 +17110,7 @@ Progress progressFor({
   int? reachable,
 }) {
   if (attempted <= 0) return Progress.notStarted;
-  if (attempted < kMinLooksToScore || rate == null) {
+  if (attempted < looksNeededToScore(reachable) || rate == null) {
     return Progress.justStarted;
   }
   if (rate < 50) return Progress.needsWork;
@@ -17107,13 +17132,34 @@ Progress progressFor({
 /// NOT an average of percentages. Averaging let a unit drift upward on
 /// coverage alone and downward on nothing having been touched — one
 /// subtopic at 100% against five never opened came out as "17%", a number
-/// describing no student's experience. A unit is only as complete as its
-/// least complete subtopic, and it is Completed when all of them are.
+/// describing no student's experience.
+///
+/// A unit is as strong as its WEAKEST TOUCHED subtopic, and Completed only
+/// when nothing is left. Two rules follow from that and both matter:
+///
+///   * untouched subtopics do not set the word. A plain minimum would call
+///     a unit with five completed subtopics and one unopened one "Not
+///     started", which is false about five sixths of the unit. What is
+///     untouched shows as grey nodes and in the answered count, where it
+///     belongs.
+///   * but they DO block the top rung. Completed is a claim about the whole
+///     unit, so anything unopened or unfinished holds it at Nearly there —
+///     which is exactly the coverage-over-accuracy rule one level up.
 Progress unitProgress(Iterable<Progress> subtopics) {
   final all = subtopics.toList();
   if (all.isEmpty) return Progress.notStarted;
-  if (all.every((p) => p == Progress.notStarted)) return Progress.notStarted;
-  return all.reduce((a, b) => a.index <= b.index ? a : b);
+
+  final touched = all.where((p) => p != Progress.notStarted).toList();
+  if (touched.isEmpty) return Progress.notStarted;
+
+  final weakest = touched.reduce((a, b) => a.index <= b.index ? a : b);
+  if (weakest != Progress.completed) return weakest;
+
+  // Everything touched is Completed. Whether the UNIT is depends on
+  // whether anything is still untouched.
+  return touched.length == all.length
+      ? Progress.completed
+      : Progress.nearlyThere;
 }
 
 String progressWord(Progress p) => switch (p) {
@@ -17137,32 +17183,24 @@ Band progressBand(Progress p) => switch (p) {
       Progress.completed => Band.green,
     };
 
-/// What to call a subtopic whose percentage is null.
+/// The words for an ACCURACY band on its own, where there is no coverage
+/// to weigh and something else on the screen is carrying it.
 ///
-/// Null means "no number worth showing", and that covers TWO different
-/// situations which the app was calling the same thing:
+/// One caller left: the Improve view's first-try bar, which sits beside its
+/// own coverage bar reading "3/8 done", so the two halves are already
+/// separate there and this only has to name the accuracy half.
 ///
-///   never opened          nothing has happened, and "Not started" is true
-///   opened once or twice  something happened, and "Not started" is a lie
-///
-/// The second case is what produced a report that contradicted itself on
-/// one screen: the topic map called The product rule "not started" while
-/// "Worth practising" listed it as costing wrong taps, from the same data.
-/// The dash is right either way — one or two answers is not a score — but
-/// the words beside it have to match what the student actually did.
-String subtopicWord(SubtopicStat stat) {
-  if (stat.firstLooks <= 0) return 'not started';
-  // Says what happened AND why there is no number, in the space a single
-  // word had.
-  return 'just started';
-}
-
+/// Green is "Strong", NOT "Mastered". Mastered was a coverage claim being
+/// made by a number that had never counted coverage, which is how a
+/// two-question sample came to wear the strongest word in the app. The
+/// ladder owns that claim now and spells it "Completed"; this vocabulary
+/// deliberately has no top rung to hand out.
 String bandWord(Band b) => switch (b) {
-      Band.green => 'Mastered',
+      Band.green => 'Strong',
       Band.lightGreen => 'Nearly there',
       Band.yellow => 'Developing',
       Band.orange => 'Needs work',
-      Band.grey => 'Not started',
+      Band.grey => 'No score yet',
     };
 
 /// The variant for TEXT in a band colour. The fill palette above is tuned
@@ -17309,6 +17347,16 @@ class ReportData {
   /// numbers later, with no second pass over the widgets.
   final Map<String, int> testScores;
 
+  /// How many questions in each subtopic this student may ATTEMPT, keyed by
+  /// tag, from my_reachable_pool().
+  ///
+  /// The denominator of the coverage half of the ladder, and deliberately
+  /// not `SubtopicStat.questions`: that counts the whole bank including the
+  /// half behind Astro+, so using it would put the top rung behind the
+  /// paywall with nothing on screen to say why. Empty means the pool is
+  /// unknown, and progressFor withholds the top rung rather than guessing.
+  final Map<String, int> reachable;
+
   const ReportData({
     required this.firstName,
     required this.grade,
@@ -17324,18 +17372,27 @@ class ReportData {
     required this.units,
     required this.weakTopics,
     this.testScores = const {},
+    this.reachable = const {},
   });
 
   bool get hasWork => questionsSeen > 0;
 
-  /// The same report with best-test scores attached.
+  /// The same report with the two side numbers attached.
   ///
-  /// They arrive from my_percentages rather than from report_payload, and
-  /// that is deliberate: report_payload is a large, load-bearing function
-  /// covered by 212 checks, and my_percentages already computes exactly
-  /// this and is covered by its own. Merging two results in the app is
-  /// cheaper and safer than reshaping one of them in SQL.
-  ReportData withTestScores(Map<String, int> scores) => ReportData(
+  /// Both arrive from their own functions rather than from report_payload,
+  /// and that is deliberate: report_payload is a large, load-bearing thing
+  /// covered by 212 checks, while my_percentages and my_reachable_pool each
+  /// already compute exactly one of these and carry their own. Merging
+  /// three results in the app is cheaper and safer than reshaping one of
+  /// them in SQL.
+  ///
+  /// An omitted argument keeps what is already there, so a call that only
+  /// knows one of them cannot silently blank the other.
+  ReportData withSideNumbers({
+    Map<String, int>? scores,
+    Map<String, int>? reachable,
+  }) =>
+      ReportData(
         firstName: firstName,
         grade: grade,
         course: course,
@@ -17349,7 +17406,8 @@ class ReportData {
         bronze: bronze,
         units: units,
         weakTopics: weakTopics,
-        testScores: scores,
+        testScores: scores ?? testScores,
+        reachable: reachable ?? this.reachable,
       );
 
   factory ReportData.fromJson(Map<String, dynamic> j) {
@@ -17386,7 +17444,11 @@ class ReportRepository {
   Future<ReportData> mine() async {
     final row = await _db.rpc('my_report');
     final data = ReportData.fromJson(Map<String, dynamic>.from(row as Map));
-    return data.withTestScores(await _testScores());
+    // Two independent round trips with nothing to say to each other, so
+    // they go together. Awaiting them in sequence would put a whole extra
+    // trip's latency on a screen that already waited for my_report.
+    final side = await Future.wait([_testScores(), _reachablePool()]);
+    return data.withSideNumbers(scores: side[0], reachable: side[1]);
   }
 
   /// Best test score per subtopic tag, from my_percentages.
@@ -17412,13 +17474,60 @@ class ReportRepository {
     }
   }
 
+  /// How many questions per subtopic this student may attempt, from
+  /// my_reachable_pool.
+  ///
+  /// Fails quiet for the same reason as the scores above, and the failure
+  /// is safe in the right direction: an empty map means no subtopic can
+  /// prove coverage, so the ladder tops out at "Nearly there" for everyone
+  /// until the call works again. A broken read under-claims rather than
+  /// handing out a Completed nobody earned.
+  Future<Map<String, int>> _reachablePool() async {
+    try {
+      final rows = await _db.rpc('my_reachable_pool') as List;
+      final out = <String, int>{};
+      for (final raw in rows) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final tag = row['tag'] as String?;
+        final open = (row['questions_open'] as num?)?.toInt();
+        if (tag != null && open != null) out[tag] = open;
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
   /// Reads a shared report by token. Callable without an account — the token
   /// is the authentication, which is why revoking has to work instantly.
   /// Returns null for a revoked or unknown link.
   Future<ReportData?> shared(String token) async {
     final row = await _db.rpc('shared_report', params: {'p_token': token});
     if (row == null) return null;
-    return ReportData.fromJson(Map<String, dynamic>.from(row as Map));
+    final data = ReportData.fromJson(Map<String, dynamic>.from(row as Map));
+    // The parent needs the same pool the student has, or their copy of the
+    // report says different words about the same work — the child sees
+    // "Completed" and the parent, reading the identical data, "Nearly
+    // there". shared_reachable_pool is the same numbers behind the same
+    // token. It fails quiet in the safe direction, like the student's.
+    return data.withSideNumbers(reachable: await _sharedPool(token));
+  }
+
+  Future<Map<String, int>> _sharedPool(String token) async {
+    try {
+      final rows = await _db
+          .rpc('shared_reachable_pool', params: {'p_token': token}) as List;
+      final out = <String, int>{};
+      for (final raw in rows) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final tag = row['tag'] as String?;
+        final open = (row['questions_open'] as num?)?.toInt();
+        if (tag != null && open != null) out[tag] = open;
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
   }
 
   /// The live share token, creating one on first use. Calling twice returns
@@ -17647,6 +17756,7 @@ class ReportView extends StatelessWidget {
             units: data.units,
             centreLabel: 'Grade ${data.grade}',
             scores: data.testScores,
+            reachable: data.reachable,
           ),
 
           const SizedBox(height: 30),
@@ -17659,7 +17769,11 @@ class ReportView extends StatelessWidget {
             style: TextStyle(fontSize: 12.5, height: 1.5, color: kInkSoft),
           ),
           const SizedBox(height: 16),
-          ...data.units.map((u) => _UnitBar(unit: u)),
+          ...data.units.map((u) => _UnitBar(
+                unit: u,
+                scores: data.testScores,
+                reachable: data.reachable,
+              )),
 
           if (data.weakTopics.isNotEmpty) ...[
             const SizedBox(height: 30),
@@ -17823,11 +17937,20 @@ class _StatTile extends StatelessWidget {
 /// visible rather than averaged away.
 class _UnitBar extends StatelessWidget {
   final UnitStat unit;
-  const _UnitBar({required this.unit});
+  final Map<String, int> scores;
+  final Map<String, int> reachable;
+
+  const _UnitBar({
+    required this.unit,
+    this.scores = const {},
+    this.reachable = const {},
+  });
 
   @override
   Widget build(BuildContext context) {
-    final colour = bandColour(unit.band);
+    final rung = unitLadder(unit, scores: scores, reachable: reachable);
+    final band = progressBand(rung);
+    final colour = bandColour(band);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -17850,15 +17973,15 @@ class _UnitBar extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 unit.firstTryRate == null
-                    ? bandWord(unit.band)
+                    ? progressWord(rung)
                     : '${unit.firstTryRate}% first try · '
-                        '${bandWord(unit.band).toLowerCase()}',
+                        '${progressWord(rung).toLowerCase()}',
                 style: TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
-                  // The band word carries the meaning; the darker variant
-                  // keeps it readable. Colour alone is never the message.
-                  color: bandTextColour(unit.band),
+                  // The word carries the meaning; the darker variant keeps
+                  // it readable. Colour alone is never the message.
+                  color: bandTextColour(band),
                 ),
               ),
             ],
@@ -17933,6 +18056,43 @@ int? subtopicMastery(SubtopicStat s, {Map<String, int> override = const {}}) {
   return s.firstTryRate;
 }
 
+/// The ladder for one subtopic, from what the report already carries.
+///
+/// The bridge between the numbers and the rungs, and the only place the
+/// two are joined, so the tree, the map and the summary cannot come to
+/// different conclusions about the same subtopic.
+Progress subtopicProgress(
+  SubtopicStat s, {
+  Map<String, int> scores = const {},
+  Map<String, int> reachable = const {},
+}) {
+  // A finished practice test is a whole sample on its own, so it clears
+  // the thin-sample guard that exists to stop two lucky taps reading as a
+  // score. It does NOT clear coverage: a test samples the pool, it is not
+  // the pool, so this never claims more looks than the guard needs.
+  final open = reachable[s.tag];
+  final needed = looksNeededToScore(open);
+  final tested = scores.containsKey(s.tag);
+  final attempted =
+      tested && s.firstLooks < needed ? needed : s.firstLooks;
+
+  return progressFor(
+    attempted: attempted,
+    rate: subtopicMastery(s, override: scores),
+    reachable: open,
+  );
+}
+
+/// The ladder for a whole unit, from its subtopics.
+Progress unitLadder(
+  UnitStat u, {
+  Map<String, int> scores = const {},
+  Map<String, int> reachable = const {},
+}) =>
+    unitProgress(u.subtopics.map(
+      (s) => subtopicProgress(s, scores: scores, reachable: reachable),
+    ));
+
 int? unitMastery(UnitStat u, {Map<String, int> override = const {}}) {
   if (u.subtopics.isEmpty) return null;
   var touched = 0;
@@ -17960,10 +18120,15 @@ class _TopicMapSection extends StatefulWidget {
   /// section starts producing them; the widgets below already honour it.
   final Map<String, int> scores;
 
+  /// Questions this student may attempt per subtopic. The coverage half of
+  /// the ladder; empty means unknown, which holds the top rung back.
+  final Map<String, int> reachable;
+
   const _TopicMapSection({
     required this.units,
     required this.centreLabel,
     this.scores = const {},
+    this.reachable = const {},
   });
 
   @override
@@ -17994,31 +18159,51 @@ class _TopicMapSectionState extends State<_TopicMapSection> {
         ),
         const SizedBox(height: 14),
         if (_view == 0)
-          _MindMap(units: widget.units, centreLabel: widget.centreLabel)
+          _MindMap(
+            units: widget.units,
+            centreLabel: widget.centreLabel,
+            scores: widget.scores,
+            reachable: widget.reachable,
+          )
         else
-          _TopicTree(units: widget.units, scores: widget.scores),
+          TopicTree(
+            units: widget.units,
+            scores: widget.scores,
+            reachable: widget.reachable,
+          ),
       ],
     );
   }
 }
 
-/// Every unit and every subtopic as rows, with the percentage and the band.
+/// Every unit and every subtopic as rows, with the ladder and the counts.
+///
+/// Public, like SubjectSwitcher and SubtopicRow, for the same reason: this
+/// is where the progress rules become words on a screen, and a rule tested
+/// in isolation while the widget quietly reads something else is not
+/// tested at all.
 ///
 /// This is also the accessible half of the pair, and that is not a
 /// side-effect. The mindmap's nodes are pointer-only — draggable, tappable,
 /// unreachable by keyboard or screen reader — and the subtopic bands existed
 /// nowhere else. Here they are text in a list, which anything can read.
-class _TopicTree extends StatefulWidget {
+class TopicTree extends StatefulWidget {
   final List<UnitStat> units;
   final Map<String, int> scores;
+  final Map<String, int> reachable;
 
-  const _TopicTree({required this.units, this.scores = const {}});
+  const TopicTree({
+    super.key,
+    required this.units,
+    this.scores = const {},
+    this.reachable = const {},
+  });
 
   @override
-  State<_TopicTree> createState() => _TopicTreeState();
+  State<TopicTree> createState() => TopicTreeState();
 }
 
-class _TopicTreeState extends State<_TopicTree> {
+class TopicTreeState extends State<TopicTree> {
   final Set<String> _open = <String>{};
 
   @override
@@ -18027,12 +18212,23 @@ class _TopicTreeState extends State<_TopicTree> {
     // Open the unit that most needs attention, so the list arrives already
     // saying something rather than as a wall of closed rows. Weakest first,
     // and only if it has actually been started.
+    //
+    // By RUNG, then by percentage within a rung. Picking on the old unit
+    // percentage alone opened whichever unit had been touched least, since
+    // that number fell as coverage fell — so the row that sprang open was
+    // usually the newest one rather than the one going worst.
     UnitStat? worst;
+    Progress? worstRung;
     int? worstPct;
     for (final u in widget.units) {
-      final pct = unitMastery(u, override: widget.scores);
-      if (pct == null) continue;
-      if (worstPct == null || pct < worstPct) {
+      final rung =
+          unitLadder(u, scores: widget.scores, reachable: widget.reachable);
+      if (rung == Progress.notStarted) continue;
+      final pct = unitMastery(u, override: widget.scores) ?? 100;
+      if (worstRung == null ||
+          rung.index < worstRung.index ||
+          (rung == worstRung && pct < worstPct!)) {
+        worstRung = rung;
         worstPct = pct;
         worst = u;
       }
@@ -18057,6 +18253,7 @@ class _TopicTreeState extends State<_TopicTree> {
               _UnitTreeRow(
                 unit: widget.units[i],
                 scores: widget.scores,
+                reachable: widget.reachable,
                 expanded: _open.contains(widget.units[i].unit),
                 isLast: i == widget.units.length - 1,
                 onToggle: () => setState(() {
@@ -18074,6 +18271,7 @@ class _TopicTreeState extends State<_TopicTree> {
 class _UnitTreeRow extends StatelessWidget {
   final UnitStat unit;
   final Map<String, int> scores;
+  final Map<String, int> reachable;
   final bool expanded;
   final bool isLast;
   final VoidCallback onToggle;
@@ -18081,6 +18279,7 @@ class _UnitTreeRow extends StatelessWidget {
   const _UnitTreeRow({
     required this.unit,
     required this.scores,
+    required this.reachable,
     required this.expanded,
     required this.isLast,
     required this.onToggle,
@@ -18088,8 +18287,8 @@ class _UnitTreeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pct = unitMastery(unit, override: scores);
-    final band = pct == null ? Band.grey : bandForRate(pct);
+    final rung = unitLadder(unit, scores: scores, reachable: reachable);
+    final band = progressBand(rung);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -18100,8 +18299,7 @@ class _UnitTreeRow extends StatelessWidget {
         Semantics(
           button: true,
           expanded: expanded,
-          label: '${unit.unit}. '
-              '${pct == null ? 'Not started.' : '$pct per cent, ${bandWord(band).toLowerCase()}.'} '
+          label: '${unit.unit}. ${progressWord(rung)}. '
               '${unit.solved} of ${unit.total} questions answered.',
           child: InkWell(
             onTap: onToggle,
@@ -18128,7 +18326,32 @@ class _UnitTreeRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  _MasteryPercent(pct: pct, band: band, big: true),
+                  // The word, where a percentage used to be.
+                  //
+                  // That percentage was the mean over the unit's subtopics
+                  // counting an untouched one as zero, so it moved on
+                  // accuracy AND on coverage and told you which only if you
+                  // knew the rule. One subtopic at 100% against five never
+                  // opened read "17%", which describes nothing that
+                  // happened to the student. The word carries the accuracy
+                  // now and the count beside it carries the coverage, and
+                  // neither is pretending to be the other. Subtopic rows,
+                  // one tap away, still show real percentages, because
+                  // there the number means one thing.
+                  Flexible(
+                    child: Text(
+                      progressWord(rung),
+                      textAlign: TextAlign.right,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: rung == Progress.notStarted
+                            ? kInkSoft
+                            : bandTextColour(band),
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 10),
                   SizedBox(
                     width: 78,
@@ -18149,7 +18372,8 @@ class _UnitTreeRow extends StatelessWidget {
             child: Column(
               children: [
                 for (final s in unit.subtopics)
-                  _SubtopicTreeRow(stat: s, scores: scores),
+                  _SubtopicTreeRow(
+                      stat: s, scores: scores, reachable: reachable),
                 const SizedBox(height: 4),
               ],
             ),
@@ -18163,17 +18387,38 @@ class _UnitTreeRow extends StatelessWidget {
 class _SubtopicTreeRow extends StatelessWidget {
   final SubtopicStat stat;
   final Map<String, int> scores;
+  final Map<String, int> reachable;
 
-  const _SubtopicTreeRow({required this.stat, required this.scores});
+  const _SubtopicTreeRow({
+    required this.stat,
+    required this.scores,
+    required this.reachable,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final pct = subtopicMastery(stat, override: scores);
-    final band = pct == null ? Band.grey : bandForRate(pct);
+    // The word and the colour come from the ladder, which knows about
+    // coverage; the number beside them is still accuracy alone. That split
+    // is the point — one of them cannot say both things.
+    final rung = subtopicProgress(stat, scores: scores, reachable: reachable);
+
+    // And the number obeys the ladder's guard, not its own. subtopicMastery
+    // shows a percentage from two first looks; the guard needs three unless
+    // the pool is smaller. Left alone those disagree by one answer and put
+    // "100% · just started" on the screen, which is the original complaint
+    // with a caption bolted on. Below the guard there is no number, which
+    // is what "not enough to score yet" means.
+    final pct = rung.index >= Progress.needsWork.index
+        ? subtopicMastery(stat, override: scores)
+        : null;
+    final band = progressBand(rung);
+    final open = reachable[stat.tag];
 
     return Semantics(
       label: '${stat.label}. '
-          '${pct == null ? (stat.firstLooks > 0 ? 'Just started, ${stat.firstLooks} answered, not enough to score yet.' : 'Not started.') : '$pct per cent, ${bandWord(band).toLowerCase()}.'}',
+          '${progressWord(rung)}.'
+          '${pct == null ? '' : ' $pct per cent first try.'}'
+          '${open == null ? '' : ' ${stat.firstLooks} of $open questions attempted.'}',
       child: Padding(
         padding: const EdgeInsets.fromLTRB(44, 7, 16, 7),
         child: Row(
@@ -18200,13 +18445,14 @@ class _SubtopicTreeRow extends StatelessWidget {
             SizedBox(
               width: 78,
               child: Text(
-                pct == null
-                    ? subtopicWord(stat)
-                    : bandWord(band).toLowerCase(),
+                progressWord(rung).toLowerCase(),
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   fontSize: 11,
-                  color: pct == null ? kInkSoft : bandTextColour(band),
+                  color: rung == Progress.notStarted ||
+                          rung == Progress.justStarted
+                      ? kInkSoft
+                      : bandTextColour(band),
                 ),
               ),
             ),
@@ -18353,6 +18599,13 @@ class _MindMap extends StatefulWidget {
   final List<UnitStat> units;
   final String centreLabel;
 
+  /// The same two maps the tree gets. The map and the list are two views of
+  /// one set of facts, so they read the ladder from the same inputs — a
+  /// node that is green here and a row that says "developing" there would
+  /// be the original bug wearing a different hat.
+  final Map<String, int> scores;
+  final Map<String, int> reachable;
+
   /// How tall the canvas is. The report embeds the map in a scrolling page
   /// and gives it a fixed strip; the topics pane hands it the whole area.
   final double? height;
@@ -18371,6 +18624,8 @@ class _MindMap extends StatefulWidget {
   const _MindMap({
     required this.units,
     required this.centreLabel,
+    this.scores = const {},
+    this.reachable = const {},
     this.height,
     this.sleepUntilTapped = true,
     this.onOpenUnit,
@@ -18889,14 +19144,16 @@ class _MindMapState extends State<_MindMap> {
 
     for (var i = 0; i < widget.units.length; i++) {
       final unit = widget.units[i];
-      final colour = bandColour(unit.band);
+      final rung = unitLadder(unit,
+          scores: widget.scores, reachable: widget.reachable);
+      final colour = bandColour(progressBand(rung));
       final open = _expanded.contains('u$i');
       addNode(
         'u$i',
         Semantics(
           button: true,
           expanded: open,
-          label: '${unit.unit}, ${bandWord(unit.band).toLowerCase()}',
+          label: '${unit.unit}, ${progressWord(rung).toLowerCase()}',
           child: Container(
             constraints: const BoxConstraints(maxWidth: 290),
             padding: const EdgeInsets.fromLTRB(13, 7, 7, 7),
@@ -19038,16 +19295,19 @@ class _MindMapState extends State<_MindMap> {
       if (!open) continue;
       for (var sIndex = 0; sIndex < unit.subtopics.length; sIndex++) {
         final sub = unit.subtopics[sIndex];
-        final subColour = bandColour(sub.band);
+        final subRung = subtopicProgress(sub,
+            scores: widget.scores, reachable: widget.reachable);
+        final subColour = bandColour(progressBand(subRung));
+        final subOpen = widget.reachable[sub.tag];
         addNode(
           'u$i-s$sIndex',
           Tooltip(
-            // Same rule as the tree row: a subtopic with an answer in it
-            // is not "not started", whatever the percentage says.
-            message: sub.firstTryRate == null
-                ? '${sub.label} — ${subtopicWord(sub)}'
-                : '${sub.label} — ${sub.firstTryRate}% first try '
-                    '(${bandWord(sub.band).toLowerCase()})',
+            // Says both halves, because the node's colour is now a verdict
+            // on both. "80% first try, 3 of 6 answered" is the whole story
+            // in the space the percentage alone used to take.
+            message: '${sub.label} — ${progressWord(subRung).toLowerCase()}'
+                '${sub.firstTryRate == null ? '' : ', ${sub.firstTryRate}% first try'}'
+                '${subOpen == null ? '' : ', ${sub.firstLooks} of $subOpen answered'}',
             child: Container(
               constraints: const BoxConstraints(maxWidth: 175),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

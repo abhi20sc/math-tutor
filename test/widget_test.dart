@@ -721,6 +721,36 @@ void main() {
       expect(at(70), Progress.nearlyThere);
     });
 
+    test('a two-question pool can still be finished', () {
+      // Counted on the real bank: 26 subtopics across the six courses have
+      // exactly two questions open on a free account. A flat three-look
+      // guard made every one of them permanently unscoreable for anyone
+      // who had not paid — answer both, still "Just started", for ever.
+      expect(looksNeededToScore(2), 2);
+      expect(progressFor(attempted: 2, rate: 100, reachable: 2),
+          Progress.completed);
+      // And it scores coarsely, which is the honest limit of two questions.
+      expect(progressFor(attempted: 2, rate: 50, reachable: 2),
+          Progress.developing);
+    });
+
+    test('but a small pool does not lower the bar for a big one', () {
+      expect(looksNeededToScore(7), kMinLooksToScore);
+      expect(looksNeededToScore(3), kMinLooksToScore);
+      expect(looksNeededToScore(null), kMinLooksToScore);
+      expect(looksNeededToScore(0), kMinLooksToScore);
+      expect(progressFor(attempted: 2, rate: 100, reachable: 7),
+          Progress.justStarted);
+    });
+
+    test('one look is still one look, whatever the pool', () {
+      // A one-question subtopic would score off a single tap. Nothing in
+      // the bank is that small today; the guard should hold anyway.
+      expect(looksNeededToScore(1), 1);
+      expect(progressFor(attempted: 1, rate: 100, reachable: 1),
+          Progress.completed);
+    });
+
     test('untouched is not started, and that stays true', () {
       expect(progressFor(attempted: 0, rate: null, reachable: 7),
           Progress.notStarted);
@@ -734,24 +764,118 @@ void main() {
           Progress.nearlyThere);
     });
 
-    test('a unit is only as complete as its weakest touched subtopic', () {
+    test('a unit is as strong as its weakest TOUCHED subtopic', () {
       // NOT an average. One subtopic at 100% against five untouched used to
       // come out "17%", a number describing no student's experience.
-      expect(
-        unitProgress([Progress.completed, Progress.notStarted]),
-        Progress.notStarted,
-      );
       expect(
         unitProgress([Progress.completed, Progress.developing]),
         Progress.developing,
       );
+      expect(
+        unitProgress([Progress.nearlyThere, Progress.needsWork]),
+        Progress.needsWork,
+      );
     });
 
-    test('a unit is completed only when every subtopic is', () {
+    test('an untouched subtopic does not call the whole unit not started', () {
+      // The trap in a plain minimum: five subtopics finished and one never
+      // opened is not "Not started", it is a unit with one thing left.
+      expect(
+        unitProgress([
+          Progress.completed,
+          Progress.completed,
+          Progress.notStarted,
+        ]),
+        Progress.nearlyThere,
+      );
+      expect(
+        unitProgress([Progress.developing, Progress.notStarted]),
+        Progress.developing,
+      );
+    });
+
+    test('but an untouched subtopic DOES block the top rung', () {
+      // Completed is a claim about the whole unit. Same coverage-beats-
+      // accuracy rule as one level down.
       expect(unitProgress([Progress.completed, Progress.completed]),
           Progress.completed);
+      expect(unitProgress([Progress.completed, Progress.notStarted]),
+          Progress.nearlyThere);
       expect(unitProgress([Progress.completed, Progress.nearlyThere]),
           Progress.nearlyThere);
+    });
+
+    test('a unit nobody has opened is not started, and one with no subtopics '
+        'is too', () {
+      expect(unitProgress([Progress.notStarted, Progress.notStarted]),
+          Progress.notStarted);
+      expect(unitProgress(const []), Progress.notStarted);
+    });
+
+    // -----------------------------------------------------------------
+    // The adapters, which are where the ladder meets the real report
+    // -----------------------------------------------------------------
+
+    test('a subtopic reads its rung off the report and the pool', () {
+      final s = sub('deriv', looks: 6, rate: 95);
+      expect(
+        subtopicProgress(s, reachable: {'deriv': 6}),
+        Progress.completed,
+      );
+      expect(
+        subtopicProgress(s, reachable: {'deriv': 9}),
+        Progress.nearlyThere,
+      );
+      // No pool at all: the top rung is withheld rather than guessed.
+      expect(subtopicProgress(s), Progress.nearlyThere);
+    });
+
+    test('a practice test clears the thin-sample guard but not coverage', () {
+      // A finished test is a whole sample, so 0 first looks plus a test
+      // score is a score — it must not read "Not started" beside 95%,
+      // which is the same self-contradiction in a new place.
+      final s = sub('deriv', looks: 0);
+      expect(
+        subtopicProgress(s, scores: {'deriv': 95}, reachable: {'deriv': 3}),
+        Progress.completed,
+      );
+      // But a test is a SAMPLE of the pool, not the pool. Six questions
+      // open, a test taken, no practice: strong, not finished.
+      expect(
+        subtopicProgress(s, scores: {'deriv': 95}, reachable: {'deriv': 6}),
+        Progress.nearlyThere,
+      );
+    });
+
+    test('without a test score, no looks is still not started', () {
+      expect(subtopicProgress(sub('deriv', looks: 0), reachable: {'deriv': 3}),
+          Progress.notStarted);
+    });
+
+    test('a unit rolls its own subtopics up', () {
+      final u = unit([
+        sub('a', looks: 4, rate: 95),
+        sub('b', looks: 4, rate: 55),
+      ]);
+      expect(
+        unitLadder(u, reachable: {'a': 4, 'b': 4}),
+        Progress.developing,
+      );
+      expect(
+        unitLadder(
+          unit([sub('a', looks: 4, rate: 95), sub('b', looks: 4, rate: 95)]),
+          reachable: {'a': 4, 'b': 4},
+        ),
+        Progress.completed,
+      );
+      // One subtopic never opened holds the whole unit off the top rung.
+      expect(
+        unitLadder(
+          unit([sub('a', looks: 4, rate: 95), sub('b', looks: 0)]),
+          reachable: {'a': 4, 'b': 4},
+        ),
+        Progress.nearlyThere,
+      );
     });
 
     test('every rung has a word and a colour', () {
@@ -765,6 +889,77 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // The ladder on the screen
+  // -------------------------------------------------------------------------
+  //
+  // The rules above are pure functions and pass in isolation. These check
+  // the part that cannot be proved that way: that the widget actually asks
+  // them. A ladder nothing calls is worth nothing, and the failure mode is
+  // silent — the old wording simply keeps rendering.
+  group('the report tree renders the ladder', () {
+    Future<void> show(
+      WidgetTester tester,
+      List<SubtopicStat> subs, {
+      Map<String, int> reachable = const {},
+    }) =>
+        tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: TopicTree(units: [unit(subs)], reachable: reachable),
+            ),
+          ),
+        ));
+
+    testWidgets('the word "Mastered" is gone from it', (tester) async {
+      // The complaint, in one line. Two right answers used to render as
+      // 100% and the strongest word in the app.
+      await show(tester, [sub('a', looks: 2, rate: 100)],
+          reachable: {'a': 7});
+      expect(find.textContaining('astered'), findsNothing);
+      expect(find.textContaining('astered', skipOffstage: false),
+          findsNothing);
+    });
+
+    testWidgets('two of seven right reads as just started, with no number',
+        (tester) async {
+      await show(tester, [sub('a', looks: 2, rate: 100)],
+          reachable: {'a': 7});
+      expect(find.text('just started'), findsOneWidget);
+      // The number has to go too. "100% · just started" is the same
+      // complaint with a caption bolted on.
+      expect(find.textContaining('100'), findsNothing);
+    });
+
+    testWidgets('seven of seven right reads as completed', (tester) async {
+      await show(tester, [sub('a', looks: 7, rate: 100)],
+          reachable: {'a': 7});
+      expect(find.text('completed'), findsOneWidget);
+      // And the unit above it agrees, in its own capitalisation.
+      expect(find.text('Completed'), findsOneWidget);
+    });
+
+    testWidgets('the unit shows a word where the blended percentage was',
+        (tester) async {
+      // One subtopic at 100%, five never opened, used to render "17%".
+      await show(tester, [
+        sub('a', looks: 6, rate: 100),
+        for (var i = 1; i < 6; i++) sub('s$i', looks: 0),
+      ], reachable: {
+        'a': 6,
+      });
+      expect(find.text('17%'), findsNothing);
+      expect(find.text('Nearly there'), findsOneWidget);
+    });
+
+    testWidgets('a subtopic still shows its own real percentage',
+        (tester) async {
+      // The number did not go away, it went where it means one thing.
+      await show(tester, [sub('a', looks: 6, rate: 83)], reachable: {'a': 6});
+      expect(find.text('83%'), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // What a subtopic is called
   // -------------------------------------------------------------------------
   //
@@ -774,15 +969,20 @@ void main() {
   // data. The dash is right — one or two answers is not a score — but the
   // words beside it were describing a different student.
   group('subtopic wording', () {
+    // subtopicWord used to make this distinction on its own; the ladder
+    // makes it now, as its bottom two rungs, so the rule is tested through
+    // the thing that actually renders.
     test('never opened is not started', () {
-      expect(subtopicWord(sub('untouched', looks: 0)), 'not started');
+      expect(subtopicProgress(sub('untouched', looks: 0)),
+          Progress.notStarted);
     });
 
     test('opened but not enough to score is JUST started', () {
       // The bug. One and two looks both produce a null percentage, and the
       // app called all three of these the same thing.
-      expect(subtopicWord(sub('once', looks: 1)), 'just started');
-      expect(subtopicWord(sub('twice', looks: 2)), 'just started');
+      expect(subtopicProgress(sub('once', looks: 1)), Progress.justStarted);
+      expect(subtopicProgress(sub('twice', looks: 2)), Progress.justStarted);
+      expect(progressWord(Progress.justStarted), 'Just started');
     });
 
     test('the dash itself is unchanged, because that part was right', () {

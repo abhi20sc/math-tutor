@@ -45,11 +45,20 @@ lesson, or a student's history.
 - [ ] `supabase/migrations/my_progress.sql`
 - [ ] `supabase/migrations/student_safeguarding.sql`
 - [ ] `supabase/migrations/enrolment_links.sql`
+- [ ] `supabase/migrations/reachable_pool.sql`
 - [ ] `supabase/migrations/indexes_and_policy_perf.sql`
 
 **Do NOT re-run `astro_math_assist_setup.sql` or any question file.** They
 are already applied. Re-running the setup would drop and rebuild `questions`
 for no reason.
+
+`reachable_pool.sql` is the only one of these that redefines something the
+setup file created: `has_premium()` becomes a one-line call to the new
+`student_has_premium(uuid)`, so the same rule can also answer for a student
+who is not the caller — which is what a parent reading a share link needs.
+The answer does not change. It matters only for the ordering above: setup
+first, then this. Re-running setup afterwards would put the old inline copy
+back, which still works but puts the definition in two places again.
 
 ### 1.3 Check it took
 
@@ -59,6 +68,19 @@ for no reason.
       select * from my_consent_status();                 -- one row
       select note_rate_limit('launch-check', 2, '1 minute');  -- t, t, then f
       ```
+
+- [ ] The progress ladder can actually be finished on a free account:
+      ```sql
+      select min(questions_open), max(questions_open), count(*)
+      from my_reachable_pool();     -- signed in as a student
+      ```
+      Expect a minimum of **2** on a free account. That number is not a
+      typo and the app depends on knowing it: 26 subtopics across the six
+      courses have only two Easy/Medium questions, and the report scores a
+      subtopic off the whole pool when the pool is smaller than three
+      looks. If the minimum ever comes back as 0, a subtopic exists that a
+      free student cannot open at all, and it will sit on "Not started" for
+      ever with no way in.
 
 - [ ] Confirm the eight existing accounts are not locked out:
       ```sql
