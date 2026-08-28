@@ -18432,22 +18432,36 @@ class _MindMapState extends State<_MindMap> {
                     // is a labelled pill in the accent colour, because the
                     // whole point of the constellation is that a node is a
                     // way in and nobody was finding the way in.
-                    icon: Container(
-                      padding: const EdgeInsets.fromLTRB(9, 4, 6, 4),
+                    // `child`, not `icon`. PopupMenuButton wraps an `icon`
+                    // in an IconButton, which imposes its own square sizing
+                    // and centring on what it is given — fine for a glyph,
+                    // wrong for a pill, and the reason the label sat off
+                    // centre. `child` is rendered as handed over.
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(11, 5, 8, 5),
                       decoration: BoxDecoration(
                         color: kAccentSurface,
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Text('Open',
+                              // The default is a hair above centre next to
+                              // a glyph this size, because the text box is
+                              // taller than the ink and the arrow is not.
+                              strutStyle: const StrutStyle(
+                                  forceStrutHeight: true, height: 1),
                               style: TextStyle(
                                   fontSize: 11,
+                                  height: 1,
                                   fontWeight: FontWeight.w700,
                                   color: kOnAccent)),
+                          const SizedBox(width: 1),
                           Icon(Icons.arrow_drop_down_rounded,
-                              size: 16, color: kOnAccent),
+                              size: 15, color: kOnAccent),
                         ],
                       ),
                     ),
@@ -18681,20 +18695,20 @@ class _MindMapEdgePainter extends CustomPainter {
       if (unitPos == null) continue;
       final colour = bandColour(units[i].band);
 
-      // THE BONE: a straight line from the spine out to the unit. Straight
-      // rather than curved, because a bone is straight and because the
-      // curve is what the leaves get — the two read as different kinds of
-      // connection, which is the point.
+      // THE BONE, curved. It leaves the spine along the spine's own
+      // direction and arrives at the unit along the unit's, so the join at
+      // each end is tangent rather than a corner and the whole figure
+      // reads as one drawn line.
+      //
+      // Straight was the first version and it was correct without being
+      // nice: six hard angles off a straight spine looked like a technical
+      // diagram rather than a constellation. The leaves were already
+      // curved, so the two kinds of connection now differ by weight — 3
+      // against 2 — and by the node at the spine, which is a better
+      // distinction than one being stiff.
       final anchor = ribAnchors['u$i'];
       if (anchor != null) {
-        canvas.drawLine(
-          anchor,
-          unitPos,
-          Paint()
-            ..color = colour.withValues(alpha: 0.55)
-            ..strokeWidth = 3
-            ..strokeCap = StrokeCap.round,
-        );
+        _bone(canvas, anchor, unitPos, colour);
         // A small node where the bone meets the spine, so the join reads as
         // deliberate rather than as two lines happening to touch.
         canvas.drawCircle(
@@ -18713,6 +18727,37 @@ class _MindMapEdgePainter extends CustomPainter {
             bandColour(units[i].subtopics[s].band), 2);
       }
     }
+  }
+
+  /// The bone: a quarter turn out of the spine and up to the unit.
+  ///
+  /// Not the same curve as the leaves. _curve below leaves and arrives
+  /// HORIZONTALLY, which suits a leaf because a leaf sits out to the side
+  /// of its unit. A bone travels 95px across and 190px up, and a
+  /// horizontal-to-horizontal S over that shape folds back on itself and
+  /// reads as a zigzag rather than a sweep.
+  ///
+  /// So this one leaves along the SPINE and arrives along the unit's
+  /// vertical: tangent to the spine at the bottom, tangent to the node at
+  /// the top, one clean quarter turn between them.
+  void _bone(Canvas canvas, Offset spine, Offset unit, Color colour) {
+    final path = Path()
+      ..moveTo(spine.dx, spine.dy)
+      ..cubicTo(
+        // Out along the spine first.
+        spine.dx + (unit.dx - spine.dx) * 0.62, spine.dy,
+        // Then straight up into the unit.
+        unit.dx, unit.dy + (spine.dy - unit.dy) * 0.62,
+        unit.dx, unit.dy,
+      );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = colour.withValues(alpha: 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round,
+    );
   }
 
   void _curve(
