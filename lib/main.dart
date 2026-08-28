@@ -5734,7 +5734,7 @@ class _HomePageState extends State<HomePage> {
           ),
           _RailLink(
             icon: Icons.person_rounded,
-            label: 'Profile and preferences',
+            label: 'Profile and Preferences',
             selected: _railView == 'profile',
             onTap: () => setState(() => _railView = 'profile'),
             // Their own face (or initials) instead of a generic person icon.
@@ -5745,6 +5745,15 @@ class _HomePageState extends State<HomePage> {
               photoPath: _profile?.avatarPath,
             ),
           ),
+          // How you are looking at the course. In the rail rather than in
+          // the content, because it governs the whole surface and has to be
+          // reachable at every moment — including mid-question, which is
+          // exactly when a student wants to go and look at where they are.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 2),
+            child: _buildTopicViewToggle(),
+          ),
+
           // The rail is one list now, not two.
           //
           // It used to carry SECTIONS (Learn, Quiz, Improve, Test) above
@@ -6373,13 +6382,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
 
-        // Map or Classroom, above the overview, because it governs
-        // everything below it.
-        if (_units.isNotEmpty && _selectedUnit == null) ...[
-          const SizedBox(height: 16),
-          _buildTopicViewToggle(),
-        ],
-
         // The overview strip is for choosing what to work on. Once a unit is
         // open it only takes up vertical space above the question, so it
         // steps aside until the student comes back out.
@@ -6420,6 +6422,12 @@ class _HomePageState extends State<HomePage> {
         // So they follow the topic now, on every width. The heading above
         // them names the unit, because a row of tabs with no subject is a
         // row of tabs about nothing.
+        // Same switch, on a phone, where there is no rail to put it in.
+        if (!_wideLayout && _units.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _buildTopicViewToggle(),
+        ],
+
         // The four sections, as tabs.
         //
         // ALWAYS shown, whether or not a topic is open, and that is not
@@ -17744,6 +17752,28 @@ const double kLeafSpanPerGap = 34.0;
 /// was landing on top of it instead.
 const double kLeafMinRadius = 220.0;
 
+/// How far a unit sits off the spine, and how far its leaf fan tilts away
+/// from it. Out here with the leaf layout for the same reason: the property
+/// that matters — no leaf crossing the spine into the other wing — is
+/// arithmetic, and arithmetic should be testable without pumping a widget.
+const double kRibY = 190.0;
+const double kFanTiltDeg = 82.0;
+
+/// The subtopic counts this geometry is solved for.
+///
+/// Checked against the live bank rather than guessed: all 40 units have
+/// between four and seven subtopics (three have 4, twenty have 5, fifteen
+/// have 6, two have 7). At rib 190 and tilt 82 every fan in that range
+/// clears the spine with 58px to spare.
+///
+/// EIGHT IS WHERE IT GIVES OUT, at any tilt. A fan of eight spreads the
+/// full 230 degrees, and a 230-degree spray around a point wraps back on
+/// itself however you rotate it — no angle keeps all of it on one side. A
+/// unit with eight subtopics would put a leaf or two over the spine. Not
+/// broken, just less tidy, and it would want the span capped or a second
+/// rank of leaves rather than a bigger number here.
+const List<int> kRealSubtopicCounts = [4, 5, 6, 7];
+
 /// NOT safe to shorten. Because alternating leaves sit closer in, the
 /// tightest pair is not always the two immediate neighbours, so this cannot
 /// be reasoned about from the angular step alone — it has to be checked
@@ -17839,11 +17869,47 @@ class _MindMapState extends State<_MindMap> {
   // roughly horizontal row, the way a horizontal mind map's primary
   // branches do. Only the subtopics branch vertically.
   static const _unitOffsetX = 300.0;
-  // Wide enough that two collapsed unit pills never read as one shape, and
-  // that the row has air in it rather than being a packed strip.
-  static const _unitRowGap = 150.0;
-  // Half a unit node: maxWidth 230, so 115.
-  static const _unitHalfWidth = 115.0;
+
+  // ---- the fishbone ------------------------------------------------------
+  //
+  // Units alternate above and below a horizontal spine rather than sitting
+  // on it. That is not decoration, it is what buys the zoom.
+  //
+  // In a straight line every unit has to clear its neighbour horizontally,
+  // so the step is half a node plus a gap plus half a node: 380px. Six
+  // units came out 2,120px wide, and fit-to-content had to zoom a long way
+  // out to get that on screen, which is why the labels were small and the
+  // whole thing read as a scatter.
+  //
+  // Off a spine, neighbours are separated vertically, so only units at the
+  // SAME level need horizontal clearance and those are two steps apart.
+  // The step halves to 175, six units come out 1,300px, and the map is
+  // 1.63x narrower for exactly the same content. Same nodes, more zoom.
+  //
+  // The step is set against the node's ACTUAL width, which is 290 now that
+  // the node carries a labelled Open pill rather than a 17px icon. 175 was
+  // right for the 230px node and leaves only 60px between two same-level
+  // nodes at 290; 200 leaves 110px. Widening the node without moving this
+  // would have shipped an overlap.
+  //
+  // Still 1.51x narrower than the straight line, which is the zoom.
+  static const _spineStep = 200.0;
+  static const _ribY = kRibY;
+  // How far along the spine the rib leans as it rises. Roughly a 40 degree
+  // bone, which is what reads as a fishbone rather than a comb.
+  static const _ribSweep = 95.0;
+  // How far the leaf fan tilts off horizontal.
+  //
+  // Nearly perpendicular to the spine, pointing away from it, because a
+  // fan is WIDE: five subtopics spread 136 degrees and eight spread 230.
+  // At a shallow tilt the near half of that swings back down across the
+  // spine and tangles with the wing on the other side. At 68 the whole
+  // fan stays on its own side of the bone, which is both correct and what
+  // the barbs of a fishbone actually look like.
+  static const _fanTiltDeg = kFanTiltDeg;
+  // The gap either side of an open fan. Wider than the collapsed step,
+  // because an expanded unit is a fan of nodes rather than one node.
+  static const _fanGap = 110.0;
 
   // Subtopics fan out around their unit like leaves around a branch tip
   // rather than stacking in a column to one side. They spread across an arc
@@ -17881,6 +17947,11 @@ class _MindMapState extends State<_MindMap> {
   ({double towardRoot, double outward}) _fanReach(int unitIndex) =>
       mindmapFanReach(widget.units[unitIndex].subtopics.length);
 
+  /// Where each unit's rib meets the spine. The painter draws the spine
+  /// between these and a bone from each to its unit, which is what makes
+  /// the shape legible as one structure rather than a scatter of pills.
+  final Map<String, Offset> _ribAnchors = {};
+
   /// Units the student has dragged. Their position is theirs now, and the
   /// row layout below leaves them alone — a layout that snaps a node back
   /// after somebody deliberately moved it is a layout arguing with its user.
@@ -17916,17 +17987,40 @@ class _MindMapState extends State<_MindMap> {
       var previousOutward = 0.0;
       for (var i = 0; i < side.length; i++) {
         final open = _expanded.contains('u${side[i]}');
-        // A collapsed unit is just a node. Half its own width plus a gap is
-        // all the room it needs.
         final reach = open
             ? _fanReach(side[i])
-            : (towardRoot: _unitHalfWidth, outward: _unitHalfWidth);
+            : (towardRoot: 0.0, outward: 0.0);
+
         if (i > 0) {
-          cursorX += sign * (previousOutward + _unitRowGap + reach.towardRoot);
+          // An open unit needs its whole fan cleared. A shut one only has
+          // to clear the node beside it, and because the fishbone puts
+          // that node on the other side of the spine, one step does it.
+          cursorX += sign *
+              (open || previousOutward > 0
+                  ? previousOutward + _fanGap + reach.towardRoot
+                  : _spineStep);
         }
+
+        // The rib. A fishbone's bones do not stand perpendicular to the
+        // spine, they sweep back from it — so the unit sits both ABOVE (or
+        // below) its attachment point and further OUT along the spine.
+        // That sweep is the whole difference between a fishbone and two
+        // rows of nodes with a line between them.
+        //
+        // The two wings START ON OPPOSITE SIDES, which is what makes the
+        // shape read as deliberate. With both wings opening upward, three
+        // units a side comes out two-up-one-down twice: six bones, four of
+        // them above the spine, and the whole thing looks like it fell that
+        // way. Mirrored, any count is balanced and the figure is
+        // symmetrical through the root.
+        final up = sign > 0 ? i.isEven : i.isOdd;
+        final rib = up ? -_ribY : _ribY;
+
         final id = 'u${side[i]}';
+        _ribAnchors[id] = Offset(cursorX, _centre.dy);
         if (!_moved.contains(id)) {
-          _positions[id] = Offset(cursorX, _centre.dy);
+          _positions[id] =
+              Offset(cursorX + sign * _ribSweep, _centre.dy + rib);
         }
         previousOutward = reach.outward;
       }
@@ -17956,8 +18050,15 @@ class _MindMapState extends State<_MindMap> {
     final unit = widget.units[unitIndex];
     final unitPos = _positions['u$unitIndex']!;
     final sign = unitPos.dx >= _centre.dx ? 1.0 : -1.0;
-    // Outward — directly away from the root — is the centre of the fan.
-    final outwardDeg = sign > 0 ? 0.0 : 180.0;
+
+    // The fan points along the bone, continuing away from the spine, rather
+    // than straight out horizontally. A unit sitting above the spine throws
+    // its leaves up and out; one below throws them down and out. Leaves
+    // that all fanned horizontally would cross the spine and tangle with
+    // the wing on the other side of it.
+    final above = unitPos.dy < _centre.dy;
+    final outwardDeg = (sign > 0 ? 0.0 : 180.0) +
+        (above ? -_fanTiltDeg : _fanTiltDeg) * sign;
 
     final leaves = mindmapLeafLayout(unit.subtopics.length);
     for (var i = 0; i < unit.subtopics.length; i++) {
@@ -18058,6 +18159,7 @@ class _MindMapState extends State<_MindMap> {
   void _resetView() {
     setState(() {
       _positions.clear();
+      _ribAnchors.clear();
       _expanded.clear();
       // Including everything the student dragged. That is the whole point
       // of the button: one tap undoes any amount of rearranging.
@@ -18075,8 +18177,12 @@ class _MindMapState extends State<_MindMap> {
     final scale = _transform.value.getMaxScaleOnAxis();
     final scaled = delta / scale;
     setState(() {
-      // From here on this unit is where the student put it.
+      // From here on this unit is where the student put it. Its bone comes
+      // off the spine at that point too — dropping the anchor lets the
+      // painter fall back to a curve from the root, which is the honest
+      // drawing once a node is no longer where the layout put it.
       _moved.add('u$unitIndex');
+      _ribAnchors.remove('u$unitIndex');
       _positions['u$unitIndex'] = _positions['u$unitIndex']! + scaled;
       for (var i = 0; i < widget.units[unitIndex].subtopics.length; i++) {
         final id = 'u$unitIndex-s$i';
@@ -18137,6 +18243,7 @@ class _MindMapState extends State<_MindMap> {
                             child: CustomPaint(
                               painter: _MindMapEdgePainter(
                                 positions: _positions,
+                                ribAnchors: _ribAnchors,
                                 units: widget.units,
                                 expanded: _expanded,
                               ),
@@ -18268,8 +18375,8 @@ class _MindMapState extends State<_MindMap> {
           expanded: open,
           label: '${unit.unit}, ${bandWord(unit.band).toLowerCase()}',
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 230),
-            padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+            constraints: const BoxConstraints(maxWidth: 290),
+            padding: const EdgeInsets.fromLTRB(13, 7, 7, 7),
             decoration: BoxDecoration(
               color: kCard,
               borderRadius: BorderRadius.circular(999),
@@ -18321,8 +18428,29 @@ class _MindMapState extends State<_MindMap> {
                     padding: EdgeInsets.zero,
                     position: PopupMenuPosition.under,
                     color: kCard,
-                    icon: Icon(Icons.more_horiz_rounded,
-                        size: 17, color: kAccent),
+                    // A 17px icon is not an affordance, it is a smudge. This
+                    // is a labelled pill in the accent colour, because the
+                    // whole point of the constellation is that a node is a
+                    // way in and nobody was finding the way in.
+                    icon: Container(
+                      padding: const EdgeInsets.fromLTRB(9, 4, 6, 4),
+                      decoration: BoxDecoration(
+                        color: kAccentSurface,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Open',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: kOnAccent)),
+                          Icon(Icons.arrow_drop_down_rounded,
+                              size: 16, color: kOnAccent),
+                        ],
+                      ),
+                    ),
                     constraints: const BoxConstraints(minWidth: 176),
                     onSelected: (section) =>
                         widget.onOpenUnit!(unit.unit, section),
@@ -18509,11 +18637,13 @@ class _MapNodeState extends State<_MapNode> {
 /// The curved branches, coloured by band, drawn under the nodes.
 class _MindMapEdgePainter extends CustomPainter {
   final Map<String, Offset> positions;
+  final Map<String, Offset> ribAnchors;
   final List<UnitStat> units;
   final Set<String> expanded;
 
   _MindMapEdgePainter({
     required this.positions,
+    required this.ribAnchors,
     required this.units,
     required this.expanded,
   });
@@ -18523,10 +18653,57 @@ class _MindMapEdgePainter extends CustomPainter {
     final root = positions['root'];
     if (root == null) return;
 
+    // THE SPINE.
+    //
+    // One straight line through the root, reaching the outermost rib on
+    // each side. It is what turns a set of curves into a fishbone: without
+    // it the ribs read as unrelated branches and the eye has nothing to
+    // follow. Drawn first, and drawn faintly, because it is the armature
+    // rather than the content.
+    var minX = root.dx, maxX = root.dx;
+    for (final anchor in ribAnchors.values) {
+      if (anchor.dx < minX) minX = anchor.dx;
+      if (anchor.dx > maxX) maxX = anchor.dx;
+    }
+    if (maxX > minX) {
+      canvas.drawLine(
+        Offset(minX, root.dy),
+        Offset(maxX, root.dy),
+        Paint()
+          ..color = kInkSoft.withValues(alpha: 0.28)
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
     for (var i = 0; i < units.length; i++) {
       final unitPos = positions['u$i'];
       if (unitPos == null) continue;
-      _curve(canvas, root, unitPos, bandColour(units[i].band), 3.5);
+      final colour = bandColour(units[i].band);
+
+      // THE BONE: a straight line from the spine out to the unit. Straight
+      // rather than curved, because a bone is straight and because the
+      // curve is what the leaves get — the two read as different kinds of
+      // connection, which is the point.
+      final anchor = ribAnchors['u$i'];
+      if (anchor != null) {
+        canvas.drawLine(
+          anchor,
+          unitPos,
+          Paint()
+            ..color = colour.withValues(alpha: 0.55)
+            ..strokeWidth = 3
+            ..strokeCap = StrokeCap.round,
+        );
+        // A small node where the bone meets the spine, so the join reads as
+        // deliberate rather than as two lines happening to touch.
+        canvas.drawCircle(
+            anchor, 3.5, Paint()..color = colour.withValues(alpha: 0.7));
+      } else {
+        // A dragged unit has no anchor on the spine any more, so fall back
+        // to the old curve from the root. It still connects to something.
+        _curve(canvas, root, unitPos, colour, 3.5);
+      }
 
       if (!expanded.contains('u$i')) continue;
       for (var s = 0; s < units[i].subtopics.length; s++) {

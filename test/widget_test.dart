@@ -330,6 +330,42 @@ void main() {
       }
     });
 
+    test('no leaf ever crosses the spine into the other wing', () {
+      // The fishbone puts units above and below a horizontal spine, and
+      // throws each unit's leaves away from it. A fan is WIDE though —
+      // five subtopics spread 136 degrees, eight spread 230 — so at a
+      // shallow tilt the near half of the fan swings back down across the
+      // spine and tangles with the wing on the other side. That is what it
+      // did at 32 degrees, and it looked like a mess rather than a diagram.
+      //
+      // Checked for every combination of wing and side, because the tilt
+      // is signed by both and getting one sign wrong points the whole fan
+      // at the spine instead of away from it.
+      // The counts that actually exist, from the live bank, not a made-up
+      // range: three units have 4 subtopics, twenty have 5, fifteen have 6,
+      // two have 7. Eight would wrap however the fan is rotated, and no
+      // unit has eight — see kRealSubtopicCounts.
+      for (final count in kRealSubtopicCounts) {
+        for (final sign in [1.0, -1.0]) {
+          for (final above in [true, false]) {
+            final centre = (sign > 0 ? 0.0 : 180.0) +
+                (above ? -kFanTiltDeg : kFanTiltDeg) * sign;
+            for (final leaf in mindmapLeafLayout(count)) {
+              final rad = (centre + leaf.angleDeg) * math.pi / 180;
+              // Unit sits kRibY off the spine; the spine is dy == 0 relative
+              // to it, so a leaf crosses when it travels further back than
+              // the unit is out.
+              final dy = leaf.radius * math.sin(rad);
+              final leafY = (above ? -kRibY : kRibY) + dy;
+              expect(above ? leafY < 0 : leafY > 0, isTrue,
+                  reason: 'count $count, sign $sign, above $above: a leaf '
+                      'landed on the wrong side of the spine');
+            }
+          }
+        }
+      }
+    });
+
     test('a unit with no subtopics asks for no room', () {
       expect(mindmapLeafLayout(0), isEmpty);
       expect(mindmapFanReach(0).outward, 0);
