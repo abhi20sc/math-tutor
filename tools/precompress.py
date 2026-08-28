@@ -20,30 +20,57 @@ to serve the bytes as they are saves about 575 KB on every cold load. There
 is no runtime cost: the work happens at build time and the edge just hands
 the file over.
 
-WHY THIS IS SAFE, WHICH IS THE WHOLE ARGUMENT
+WHY THIS IS SAFE
 
-Cloudflare Pages has no content negotiation in _headers. A header set there
-is unconditional, so a file served with `Content-Encoding: br` goes out
-that way to EVERY client, including one that cannot decode brotli. Doing
-this to a file that any browser might request would hand some of them
-garbage.
+Cloudflare Pages negotiates content encoding properly. A file stored with
+`Content-Encoding: br` from _headers is served as brotli to a client that
+asks for brotli, RE-ENCODED to gzip for a client that asks for gzip, and
+decompressed to the raw bytes for a client that asks for neither. Every
+response is labelled correctly. No client is handed something it cannot
+decode.
 
-These two files are different, and the reason is worth stating exactly:
+Measured on the live site, 29 August 2026, on main.dart.wasm:
 
-    main.dart.wasm and skwasm.wasm are ONLY EVER REQUESTED BY A BROWSER
-    THAT SUPPORTS WasmGC.
+    Accept-Encoding: br            -> br,   930,235 bytes (these bytes)
+    Accept-Encoding: gzip          -> gzip, 1,197,255 bytes
+    Accept-Encoding: identity      -> none, 3,336,431 bytes (raw wasm)
+    Accept-Encoding: gzip, deflate -> gzip, 1,197,255 bytes
+    Accept-Encoding: *             -> none, 3,336,431 bytes
 
-flutter_bootstrap.js checks for WasmGC first and falls back to
-main.dart.js plus canvaskit for anything that lacks it. WasmGC landed in
-Chrome 119, Firefox 120 and Safari 18.2. Brotli landed in Chrome 50,
-Firefox 44 and Safari 11, eight years earlier in every case. So the set of
-browsers that can ask for these files is a strict subset of the set that
-can decode brotli, and there is no client that gets one without the other.
+THIS FILE PREVIOUSLY CLAIMED THE OPPOSITE, AND IT WAS WRONG.
 
-That argument does NOT extend to main.dart.js, canvaskit.wasm, the figures
-or anything else, because those ARE fetched by old browsers. They are left
-alone for Cloudflare to compress as it likes. Do not add files to the list
-below without making the same argument about them.
+It said Cloudflare had no negotiation, that the header was unconditional,
+and that pre-compressing anything an old browser might fetch would hand it
+garbage. On that reasoning the list below was restricted to files only a
+WasmGC-capable browser ever requests. The reasoning was false and the
+restriction cost real bytes on exactly the browsers that could least afford
+them — the old ones taking the main.dart.js fallback path.
+
+The argument is now simply: pre-compressing at -q 11 beats what Cloudflare
+does per-request at the edge, and costs nothing at runtime because the work
+happened at build time. That applies to any large text-like asset.
+
+WHAT STILL SHOULD NOT GO IN THE LIST
+
+Already-compressed formats. PNG, JPEG and WOFF2 have their entropy squeezed
+out already; brotli over them buys a percent or two for real build time.
+The `after >= before` guard below would catch it, but not adding them is
+better than relying on the guard.
+
+IF THIS EVER LOOKS WRONG
+
+A blank page with a console error about a corrupt wasm module means the
+header and the bytes disagree — either the file was compressed twice, or
+_headers lost its entry. Rebuild without running this script and the site
+works, slower. That is the fallback.
+
+To check a deployed file, ASK FOR AN ENCODING. `curl -I` sends no
+Accept-Encoding header, so it shows the identity response and no
+`content-encoding` line at all, which looks exactly like a failure and is
+not one:
+
+    curl -sI .../main.dart.wasm                      # misleading
+    curl -sI .../main.dart.wasm -H 'Accept-Encoding: br'   # the real answer
 
 IF THIS EVER LOOKS WRONG
 
@@ -57,13 +84,23 @@ import os
 import subprocess
 import sys
 
-# Only files whose requesters are guaranteed to support brotli. See above.
+# Large text-like assets. See "WHAT STILL SHOULD NOT GO IN THE LIST" above
+# before adding anything: already-compressed formats do not belong here.
 TARGETS = [
+    # The WasmGC path, which is what a current browser takes.
     "main.dart.wasm",
-    "canvaskit/skwasm.wasm",
-    # Loaded alongside skwasm by the same WasmGC-capable browsers.
-    "canvaskit/skwasm.js",
     "main.dart.mjs",
+    "canvaskit/skwasm.wasm",
+    "canvaskit/skwasm.js",
+    # The FALLBACK path, for browsers without WasmGC. These were excluded on
+    # a mistaken reading of how Cloudflare serves _headers, which meant the
+    # oldest browsers — the slowest devices, most likely a student on a hand
+    # -me-down phone — were the only ones getting no benefit from this at
+    # all. They are the biggest files in the build.
+    "main.dart.js",
+    "canvaskit/canvaskit.wasm",
+    "canvaskit/skwasm_heavy.wasm",
+    "canvaskit/wimp.wasm",
 ]
 
 
@@ -96,6 +133,11 @@ def main() -> int:
         # and compressing again would produce a file the browser decodes
         # once and hands to the wasm parser as brotli. Wasm starts with the
         # bytes 00 61 73 6d; brotli does not.
+        #
+        # Only .wasm files can be checked this way — there is no magic
+        # number for JavaScript. For those, re-running over a build is
+        # caught by the _headers block being appended twice instead, which
+        # is why a rebuild rather than a re-run is the way to redo this.
         with open(path, "rb") as fh:
             head = fh.read(4)
         if rel.endswith(".wasm") and head != b"\x00asm":

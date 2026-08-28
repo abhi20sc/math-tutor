@@ -265,6 +265,19 @@ did. That is deliberate: keeping it in `web/_headers` would have shipped a
 brotli claim on raw files any time somebody forgot, and a raw wasm file
 served as brotli is a white screen.
 
+**Checking a deployed file needs an Accept-Encoding header.** `curl -I`
+sends none, so it shows the identity response, with no `content-encoding`
+line at all — which looks exactly like a broken deploy and is not one:
+
+```bash
+curl -sI https://astro-stem-labs.pages.dev/main.dart.wasm -H 'Accept-Encoding: br'
+```
+
+Expect `content-encoding: br`. Measured on the live site, the same file
+comes back as brotli, as gzip, or as raw wasm depending on what the client
+asks for — Cloudflare negotiates properly and labels every response
+correctly.
+
 Then upload `build/web` to Cloudflare Pages — either drag it in the
 dashboard, or `npx wrangler pages deploy build/web`.
 
