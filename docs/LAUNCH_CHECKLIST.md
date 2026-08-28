@@ -212,10 +212,16 @@ still outstanding, and both exist because the code changed under them.
       code that can only mislead whoever reads the function list next.
       Delete them in the dashboard.
 
-      Worth keeping in mind: the weekly parent report was a real feature
-      once, and that source is the only surviving copy of it. If you ever
-      want it back, save the file before deleting the function — it needs a
-      schema rebuild, not a redeploy.
+      **Download them first**, because the deployed copy is the only one:
+
+      ```bash
+      supabase functions download send-weekly-reports
+      ```
+
+      Same for `send-report-now` and `send-consent-email`. The weekly
+      parent report was a real, finished feature and its HTML is not cheap
+      work to redo. See `docs/salvaged/README.md` for what it would take to
+      revive one — a schema, not a redeploy.
 
       `--no-verify-jwt` on the webhook is required: Stripe is not a
       signed-in user. The signature check inside the function replaces it,
