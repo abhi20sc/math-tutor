@@ -98,6 +98,23 @@ still outstanding, and both exist because the code changed under them.
 
 - [ ] **Set `SITE_URL`** to the Cloudflare Pages origin, no trailing slash.
 
+      **You do not have this value yet, and that is the point.** Cloudflare
+      invents the URL when the project is first created — it is
+      `https://<project-name>.pages.dev`, and you cannot know
+      `<project-name>` until you have named the project.
+
+      So the order is: deploy first with SITE_URL unset, read the URL
+      Cloudflare gives you, then set it and redeploy the two functions.
+      Astro+ will not work in between, and that is expected rather than a
+      fault. Nothing else is affected — sign in, questions, lessons, tests
+      and the report do not touch SITE_URL at all.
+
+      If you later put a custom domain in front of it, SITE_URL has to
+      change to the custom domain and the functions redeployed again. The
+      pages.dev URL keeps working, but a browser on the custom domain will
+      be refused by CORS until SITE_URL matches what the browser is
+      actually showing.
+
       This is new. CORS on `create-checkout` used to be `'*'` — any page on
       the internet could call your payment endpoint — and is now locked to
       `SITE_URL`. If it is unset the fallback is `https://unset.invalid`,
