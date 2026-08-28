@@ -17018,6 +17018,125 @@ Band bandForRate(int? rate) {
 /// kept their daylight values against a near-black page.
 Color bandColour(Band b) => kPalette.bandFill[b.index];
 
+// ---------------------------------------------------------------------------
+// The progress ladder
+// ---------------------------------------------------------------------------
+//
+// THE PROBLEM THIS FIXES
+//
+// One number was doing two jobs. A subtopic was banded purely on first-try
+// rate, so two answers both right and seven answers all right rendered
+// identically: 100%, top band, "Mastered". Accuracy was measured and
+// coverage was not, and no amount of tuning the percentage fixes that,
+// because the percentage is not the thing that is missing.
+//
+// So the ladder has two axes. Accuracy decides WHICH band. Coverage decides
+// whether the top one is available at all.
+//
+// THE DENOMINATOR IS WHAT THE STUDENT CAN REACH
+//
+// 20 of the 40 questions in a unit are behind Astro+. Counting all 40 would
+// mean a free student could answer everything available to them, perfectly,
+// and never reach the top band, with nothing on screen to say why. The
+// denominator is therefore the pool they can actually attempt — see
+// my_reachable_pool in supabase/migrations/reachable_pool.sql — and the
+// badge says what it covers. Paying enlarges the map rather than unlocking
+// a badge.
+//
+// "COMPLETED", NOT "MASTERED"
+//
+// The word was invented here; the written spec says Completed, and that is
+// the better word for what this now measures. "Completed" is a coverage
+// claim, so gating it on coverage makes the label honest. "Mastered" was
+// the strongest word available attached to the weakest evidence, which is
+// how a two-question sample ended up wearing it.
+//
+// 90% RATHER THAN EVERYTHING RIGHT
+//
+// The spec says 90 and the spec wins. One slip in ten is humane for a
+// fourteen-year-old, and first-try only happens once — a single careless
+// tap on question 37 should not cost a topic its badge with no way back.
+// The strictness lives in coverage instead, which is losable and regainable
+// in a way a first try is not.
+
+/// Where a subtopic stands. The order is the ladder.
+enum Progress {
+  notStarted,
+  justStarted,
+  needsWork,
+  developing,
+  nearlyThere,
+  completed,
+}
+
+/// Too thin a sample to score. Two answers is not a percentage.
+const int kMinLooksToScore = 3;
+
+/// Bands one subtopic.
+///
+/// [attempted] is first looks, [rate] the first-try percentage, [reachable]
+/// how many questions in this subtopic the student may attempt on their
+/// plan. A null or zero [reachable] means we do not know the pool, and the
+/// top band is withheld rather than guessed at — better to under-claim than
+/// to hand out a Completed nobody earned.
+Progress progressFor({
+  required int attempted,
+  required int? rate,
+  int? reachable,
+}) {
+  if (attempted <= 0) return Progress.notStarted;
+  if (attempted < kMinLooksToScore || rate == null) {
+    return Progress.justStarted;
+  }
+  if (rate < 50) return Progress.needsWork;
+  if (rate < 70) return Progress.developing;
+
+  // 70 and up. The only question left is whether the top band is earned,
+  // and that is where coverage decides rather than accuracy.
+  final seenItAll = reachable != null && reachable > 0 && attempted >= reachable;
+  if (rate >= 90 && seenItAll) return Progress.completed;
+
+  // Strong but not through it yet. This is the band that did not exist
+  // before, and its absence is why a thin sample had nowhere to sit except
+  // the top.
+  return Progress.nearlyThere;
+}
+
+/// The same ladder one level up.
+///
+/// NOT an average of percentages. Averaging let a unit drift upward on
+/// coverage alone and downward on nothing having been touched — one
+/// subtopic at 100% against five never opened came out as "17%", a number
+/// describing no student's experience. A unit is only as complete as its
+/// least complete subtopic, and it is Completed when all of them are.
+Progress unitProgress(Iterable<Progress> subtopics) {
+  final all = subtopics.toList();
+  if (all.isEmpty) return Progress.notStarted;
+  if (all.every((p) => p == Progress.notStarted)) return Progress.notStarted;
+  return all.reduce((a, b) => a.index <= b.index ? a : b);
+}
+
+String progressWord(Progress p) => switch (p) {
+      Progress.notStarted => 'Not started',
+      Progress.justStarted => 'Just started',
+      Progress.needsWork => 'Needs work',
+      Progress.developing => 'Developing',
+      Progress.nearlyThere => 'Nearly there',
+      Progress.completed => 'Completed',
+    };
+
+/// The band a Progress paints as, so the ladder reuses the palette that is
+/// already measured for contrast in both themes rather than inventing a
+/// seventh colour.
+Band progressBand(Progress p) => switch (p) {
+      Progress.notStarted => Band.grey,
+      Progress.justStarted => Band.grey,
+      Progress.needsWork => Band.orange,
+      Progress.developing => Band.yellow,
+      Progress.nearlyThere => Band.lightGreen,
+      Progress.completed => Band.green,
+    };
+
 /// What to call a subtopic whose percentage is null.
 ///
 /// Null means "no number worth showing", and that covers TWO different

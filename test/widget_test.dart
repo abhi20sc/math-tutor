@@ -679,6 +679,92 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // The progress ladder
+  // -------------------------------------------------------------------------
+  //
+  // The complaint that produced this: two answers both right read as
+  // "Mastered", identically to seven answers all right. Accuracy was
+  // measured and coverage was not.
+  group('the ladder', () {
+    test('two right out of seven is NOT the top band', () {
+      // The exact case that started this. It is not Completed, and it is
+      // not a percentage either — two answers is not a score.
+      expect(progressFor(attempted: 2, rate: 100, reachable: 7),
+          Progress.justStarted);
+    });
+
+    test('seven right out of seven is', () {
+      expect(progressFor(attempted: 7, rate: 100, reachable: 7),
+          Progress.completed);
+    });
+
+    test('a perfect score on a partial pool stops at nearly there', () {
+      // The band that did not exist before. Without it a strong but
+      // incomplete student had to be either wrongly called Completed or
+      // buried in yellow.
+      expect(progressFor(attempted: 4, rate: 100, reachable: 7),
+          Progress.nearlyThere);
+    });
+
+    test('90 is enough accuracy, as the written spec says', () {
+      expect(progressFor(attempted: 7, rate: 90, reachable: 7),
+          Progress.completed);
+      expect(progressFor(attempted: 7, rate: 89, reachable: 7),
+          Progress.nearlyThere);
+    });
+
+    test('the accuracy bands are the spec cutoffs', () {
+      Progress at(int r) => progressFor(attempted: 5, rate: r, reachable: 9);
+      expect(at(49), Progress.needsWork);
+      expect(at(50), Progress.developing);
+      expect(at(69), Progress.developing);
+      expect(at(70), Progress.nearlyThere);
+    });
+
+    test('untouched is not started, and that stays true', () {
+      expect(progressFor(attempted: 0, rate: null, reachable: 7),
+          Progress.notStarted);
+    });
+
+    test('an unknown pool withholds the top band rather than guessing', () {
+      // Under-claiming beats handing out a Completed nobody earned.
+      expect(progressFor(attempted: 9, rate: 100, reachable: null),
+          Progress.nearlyThere);
+      expect(progressFor(attempted: 9, rate: 100, reachable: 0),
+          Progress.nearlyThere);
+    });
+
+    test('a unit is only as complete as its weakest touched subtopic', () {
+      // NOT an average. One subtopic at 100% against five untouched used to
+      // come out "17%", a number describing no student's experience.
+      expect(
+        unitProgress([Progress.completed, Progress.notStarted]),
+        Progress.notStarted,
+      );
+      expect(
+        unitProgress([Progress.completed, Progress.developing]),
+        Progress.developing,
+      );
+    });
+
+    test('a unit is completed only when every subtopic is', () {
+      expect(unitProgress([Progress.completed, Progress.completed]),
+          Progress.completed);
+      expect(unitProgress([Progress.completed, Progress.nearlyThere]),
+          Progress.nearlyThere);
+    });
+
+    test('every rung has a word and a colour', () {
+      for (final p in Progress.values) {
+        expect(progressWord(p), isNotEmpty);
+        expect(progressBand(p), isNotNull);
+      }
+      // The word the spec uses, not the one this app invented.
+      expect(progressWord(Progress.completed), 'Completed');
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // What a subtopic is called
   // -------------------------------------------------------------------------
   //
