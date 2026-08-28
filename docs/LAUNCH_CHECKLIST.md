@@ -40,13 +40,24 @@ Safe, because nothing has ever written to it.
 In this order. Each is safe to re-run; none of them touches a question, a
 lesson, or a student's history.
 
-- [ ] `supabase/migrations/test_review_answers.sql`
-- [ ] `supabase/migrations/learn_journey.sql`
-- [ ] `supabase/migrations/my_progress.sql`
-- [ ] `supabase/migrations/student_safeguarding.sql`
-- [ ] `supabase/migrations/enrolment_links.sql`
-- [ ] `supabase/migrations/reachable_pool.sql`
-- [ ] `supabase/migrations/indexes_and_policy_perf.sql`
+**Checked against the live database on 29 August 2026 — six of these seven
+are already applied.** Verified by looking for what each one creates, not
+by trusting this list, and the ticks are what was actually found there:
+
+- [x] `supabase/migrations/test_review_answers.sql` — `test_item_review`
+- [x] `supabase/migrations/learn_journey.sql` — `list_lessons`
+- [x] `supabase/migrations/my_progress.sql` — `my_progress`
+- [x] `supabase/migrations/student_safeguarding.sql` — `delete_my_account`
+- [x] `supabase/migrations/enrolment_links.sql` — `my_enrolment_link`
+- [ ] `supabase/migrations/reachable_pool.sql` — **the only one left.**
+      Without it the report has no coverage numbers, so nothing can reach
+      "Completed" and every subtopic tops out at "Nearly there".
+- [x] `supabase/migrations/indexes_and_policy_perf.sql` — all five indexes
+
+Re-running `student_safeguarding.sql` is worth it anyway: two of its
+functions gained a fixed `search_path` after it was first applied. Nothing
+is exploitable either way — both return a constant and touch no table — it
+just clears two permanent warnings off Supabase's advisor list.
 
 **Do NOT re-run `astro_math_assist_setup.sql` or any question file.** They
 are already applied. Re-running the setup would drop and rebuild `questions`
@@ -148,14 +159,35 @@ still outstanding, and both exist because the code changed under them.
       It also has to be the CLOUDFLARE origin now, not whatever it pointed
       at before.
 
-- [ ] **Redeploy both functions.** Not optional even with keys set: the
-      CORS change is in `create-checkout`'s source and does nothing until
-      it is deployed.
+- [ ] **Redeploy both functions, and deploy the third.** Not optional even
+      with keys set: the CORS change is in `create-checkout`'s source and
+      does nothing until it is deployed.
 
       ```bash
       supabase functions deploy create-checkout
       supabase functions deploy stripe-webhook --no-verify-jwt
+      supabase functions deploy send-link
       ```
+
+      **`send-link` has never been deployed.** Checked on the live project:
+      it holds `create-checkout`, `stripe-webhook`, `send-consent-email`,
+      `send-report-now` and `send-weekly-reports`, and no `send-link`. So
+      every consent email and every payment email the app believes it is
+      sending is going nowhere right now, and you would not know: the app
+      calls it through `trySendLink`, which treats "not deployed" the same
+      as "rate limited" and quietly falls back to showing the link on
+      screen. That fallback is why nothing looks broken. Deploying it is
+      what turns the feature on.
+
+      After deploying, send yourself a consent link and watch for the mail.
+      A silent success and a silent failure look identical from the app.
+
+- [ ] **Decide what to do about `send-consent-email`.** It is deployed on
+      the live project and is NOT in this repository — an orphan from
+      before `send-link`, which cannot be read, reviewed or updated from
+      here. Either delete it, or bring its source back into
+      `supabase/functions/` so it is maintained like the rest. The same
+      question applies to `send-report-now` and `send-weekly-reports`.
 
       `--no-verify-jwt` on the webhook is required: Stripe is not a
       signed-in user. The signature check inside the function replaces it,
@@ -373,7 +405,39 @@ The things that have never been tested end to end on hardware.
   loading is main-channel and experimental, so this waits for it to reach
   stable rather than moving the whole build off `--wasm` to get it.
 
-## 8. Known, and not fixed
+## 8. Supabase's own advisor list, triaged
+
+Run on 29 August 2026. 110 items, and the count is misleading, so here is
+what each group actually is. Re-read this before acting on that list: most
+of it is the architecture working.
+
+- **97 × "security definer function callable by authenticated".** This is
+  the design, not a finding. Every table is fail-closed and every read goes
+  through a `security definer` RPC granted to `authenticated` — that is the
+  whole protection model. Turning these off would turn the app off.
+- **6 × "callable by anon".** Exactly the six that are meant to be:
+  `shared_report`, `enrolment_by_token`, `guardian_consent_by_token` and
+  `withdraw_guardian_consent` (the token IS the authentication),
+  `list_courses` (needed on the signup screen, before an account exists)
+  and `note_rate_limit` (needed before sign-in, which is the point of it).
+  There were nine here once; the other three were an oversight and are
+  revoked. **If this number is ever not six, find out which one is new.**
+  `reachable_pool.sql` deliberately makes it seven — `shared_reachable_pool`
+  is the parent's half of a share link.
+- **4 × "RLS enabled, no policy"** on `questions`, `practice_test_items`,
+  `rate_limit_hits` and `teacher_invite_codes`. Fail-closed and correct: no
+  policy means no direct read, and the app never selects from these tables —
+  every one goes through an RPC. Adding policies would open them up.
+- **2 × "mutable search_path"** on `minimum_age` and
+  `guardian_required_below`. Fixed in the source; re-run
+  `student_safeguarding.sql` to clear them. Not exploitable — both return a
+  constant and touch no object — but a list with permanent warnings on it
+  is a list nobody reads the next real warning off.
+- **1 × leaked-password protection disabled.** Real, and already section 2.
+
+---
+
+## 9. Known, and not fixed
 
 - **The report not scrolling.** QA saw it once, on a phone, and I have not
   reproduced it: a fixture built in exactly the real

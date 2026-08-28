@@ -99,11 +99,18 @@ as $$
 $$;
 
 -- The floor. Named so a single edit moves it everywhere.
+-- These two return a constant and touch nothing, so a mutable search_path
+-- cannot be used against them — there is no object name to hijack. They set
+-- it anyway, to match age_years above and because Supabase's own advisor
+-- flags every function without it. A list with two permanent warnings on it
+-- is a list nobody reads the next real warning off.
 create or replace function minimum_age()
-returns int language sql immutable as $$ select 13 $$;
+returns int language sql immutable
+set search_path = public as $$ select 13 $$;
 
 create or replace function guardian_required_below()
-returns int language sql immutable as $$ select 18 $$;
+returns int language sql immutable
+set search_path = public as $$ select 18 $$;
 
 -- Whether this student still needs a guardian to say yes.
 --
