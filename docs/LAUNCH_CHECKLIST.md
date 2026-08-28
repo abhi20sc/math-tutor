@@ -160,7 +160,7 @@ Still worth doing before real money moves:
 flutter pub get
 flutter analyze          # expect zero issues
 flutter test             # expect 44 passing
-flutter build web --release --no-web-resources-cdn
+flutter build web --release --no-web-resources-cdn --wasm
 ```
 
 Then upload `build/web` to Cloudflare Pages — either drag it in the
@@ -233,8 +233,28 @@ for two fallback font files the framework loads to draw text, and there is
 no supported way to stop that short of bundling fonts. Google is named in
 the privacy policy for exactly that reason.
 
-Do not use `--wasm`. It was measured: 1,156 KB gzipped against 1,056 KB for
-the normal build. It is worse.
+**`--wasm` is now on, and my earlier note saying it was worse was wrong.**
+
+That note compared `main.dart.wasm` against `main.dart.js` and stopped
+there. It missed that the two builds use DIFFERENT RENDERERS, and the
+renderer is the bigger half of the download. Measured properly, as the
+browser actually fetches it:
+
+| | wasm | js |
+|---|---|---|
+| app | 1,163 KB | 1,057 KB |
+| renderer | skwasm 1,496 KB | canvaskit 2,131 KB |
+| everything else | 47 KB | 48 KB |
+| **cold load** | **2,706 KB** | **3,236 KB** |
+
+The app half is 106 KB bigger and the renderer half is 635 KB smaller, so
+the whole thing is 530 KB lighter. Comparing only the half that got worse
+is how I got it backwards.
+
+Nobody is worse off. `--wasm` builds BOTH targets and `flutter_bootstrap.js`
+picks at runtime: a browser with WasmGC (Chrome 119+, Firefox 120+, Safari
+18.2+) takes the 2,706 KB path, anything older takes the 3,236 KB one,
+which is exactly what every browser gets today.
 
 **You need about 2 GB free to build.**
 
