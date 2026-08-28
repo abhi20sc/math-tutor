@@ -3686,16 +3686,64 @@ final ThemeController kTheme = ThemeController();
 /// dark from themeMode and the platform, and our palette is then taken from
 /// its answer rather than worked out a second time from the same inputs. A
 /// second calculation is a second chance to be wrong.
-class _AstroTheme extends StatelessWidget {
+class _AstroTheme extends StatefulWidget {
   final Widget child;
   const _AstroTheme({required this.child});
 
   @override
+  State<_AstroTheme> createState() => _AstroThemeState();
+}
+
+/// Sets the palette, and then makes the screen actually repaint with it.
+///
+/// THE BUG THIS EXISTS TO FIX
+///
+/// kPalette is a plain global. Every kInk, kCard and kLine in this file
+/// reads it directly, which is what made a themeable palette possible
+/// without touching five hundred call sites — but it means none of those
+/// widgets DEPENDS on the Theme inherited widget. Flutter rebuilds a widget
+/// when something it depends on changes. These depend on nothing.
+///
+/// So switching to dark rebuilt MaterialApp, reassigned kPalette, and left
+/// every widget already on screen exactly as it was painted: white cards on
+/// a dark page, and a heading in dark ink on a dark ground. Navigating away
+/// and back fixed it, because that built the widgets afresh. It was worst
+/// on the Appearance panel, which is the one screen a student is guaranteed
+/// to be looking at when they change the theme.
+///
+/// THE FIX
+///
+/// When the brightness changes, walk the element tree and mark everything
+/// needing a rebuild. markNeedsBuild does NOT recreate State, so scroll
+/// positions, open dialogs and the question a student is halfway through
+/// all survive — which rules out the easy alternative of keying the subtree
+/// and throwing it away.
+///
+/// It runs once per theme change, not per frame.
+class _AstroThemeState extends State<_AstroTheme> {
+  Brightness? _last;
+
+  void _rebuildEverything(Element el) {
+    el.markNeedsBuild();
+    el.visitChildren(_rebuildEverything);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    kPalette = Theme.of(context).brightness == Brightness.dark
-        ? AstroPalette.dark
-        : AstroPalette.light;
-    return child;
+    final brightness = Theme.of(context).brightness;
+    kPalette =
+        brightness == Brightness.dark ? AstroPalette.dark : AstroPalette.light;
+
+    if (_last != null && _last != brightness) {
+      // After this frame: marking dirty during build is not allowed, and
+      // the widgets have to be laid out with the new palette anyway.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.visitChildElements(_rebuildEverything);
+      });
+    }
+    _last = brightness;
+
+    return widget.child;
   }
 }
 
@@ -5585,9 +5633,13 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
             }
-            final onMap = _railView == 'topics' &&
-                _topicView == 'map' &&
-                _selectedUnit == null;
+            // No `&& _selectedUnit == null`. I fixed this on the phone
+            // path and left the desktop one, so on a wide screen the
+            // switch flipped to Constellation and the pane kept drawing
+            // the classroom — the state changed and nothing moved, which
+            // reads as a broken button. Clearing the topic made it appear,
+            // which is the tell.
+            final onMap = _railView == 'topics' && _topicView == 'map';
             return Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -16350,6 +16402,26 @@ class OptionTile extends StatefulWidget {
 class _OptionTileState extends State<OptionTile> {
   bool _hovering = false;
 
+  /// Drop the hover when the option underneath changes.
+  ///
+  /// Flutter reuses a State object for the widget at the same position in a
+  /// list, so the tile that was option C on question 2 is the same State
+  /// that becomes option C on question 3. _hovering stayed true across that
+  /// swap, and the next question opened with C already lit — the previous
+  /// question's answer, shown as if the student had chosen it. On one
+  /// question the carried-over letter happened to be the correct one.
+  ///
+  /// Fixed here rather than with a key on the three call sites, because a
+  /// key fixes the callers that remember to use it and this fixes the
+  /// widget.
+  @override
+  void didUpdateWidget(OptionTile old) {
+    super.didUpdateWidget(old);
+    if (old.option.text != widget.option.text) {
+      _hovering = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final hot = _hovering && widget.enabled;
@@ -16945,6 +17017,26 @@ Band bandForRate(int? rate) {
 /// the single worst thing about the dark theme: dots, bars and branches all
 /// kept their daylight values against a near-black page.
 Color bandColour(Band b) => kPalette.bandFill[b.index];
+
+/// What to call a subtopic whose percentage is null.
+///
+/// Null means "no number worth showing", and that covers TWO different
+/// situations which the app was calling the same thing:
+///
+///   never opened          nothing has happened, and "Not started" is true
+///   opened once or twice  something happened, and "Not started" is a lie
+///
+/// The second case is what produced a report that contradicted itself on
+/// one screen: the topic map called The product rule "not started" while
+/// "Worth practising" listed it as costing wrong taps, from the same data.
+/// The dash is right either way — one or two answers is not a score — but
+/// the words beside it have to match what the student actually did.
+String subtopicWord(SubtopicStat stat) {
+  if (stat.firstLooks <= 0) return 'not started';
+  // Says what happened AND why there is no number, in the space a single
+  // word had.
+  return 'just started';
+}
 
 String bandWord(Band b) => switch (b) {
       Band.green => 'Mastered',
@@ -17962,7 +18054,7 @@ class _SubtopicTreeRow extends StatelessWidget {
 
     return Semantics(
       label: '${stat.label}. '
-          '${pct == null ? 'Not enough practice yet.' : '$pct per cent, ${bandWord(band).toLowerCase()}.'}',
+          '${pct == null ? (stat.firstLooks > 0 ? 'Just started, ${stat.firstLooks} answered, not enough to score yet.' : 'Not started.') : '$pct per cent, ${bandWord(band).toLowerCase()}.'}',
       child: Padding(
         padding: const EdgeInsets.fromLTRB(44, 7, 16, 7),
         child: Row(
@@ -17989,7 +18081,9 @@ class _SubtopicTreeRow extends StatelessWidget {
             SizedBox(
               width: 78,
               child: Text(
-                pct == null ? 'not started' : bandWord(band).toLowerCase(),
+                pct == null
+                    ? subtopicWord(stat)
+                    : bandWord(band).toLowerCase(),
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   fontSize: 11,
@@ -18829,8 +18923,10 @@ class _MindMapState extends State<_MindMap> {
         addNode(
           'u$i-s$sIndex',
           Tooltip(
+            // Same rule as the tree row: a subtopic with an answer in it
+            // is not "not started", whatever the percentage says.
             message: sub.firstTryRate == null
-                ? '${sub.label} — not started'
+                ? '${sub.label} — ${subtopicWord(sub)}'
                 : '${sub.label} — ${sub.firstTryRate}% first try '
                     '(${bandWord(sub.band).toLowerCase()})',
             child: Container(
@@ -19411,7 +19507,7 @@ class _SharedReportScreenState extends State<SharedReportScreen> {
                               Divider(height: 1, color: kLine),
                               const SizedBox(height: 14),
                               Text(
-                                'Shared from Astro Math Assist. This page was '
+                                'Shared from Astro STEM Labs. This page was '
                                 'shared by the student and can be turned off '
                                 'by them at any time.',
                                 style: TextStyle(

@@ -679,6 +679,34 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // What a subtopic is called
+  // -------------------------------------------------------------------------
+  //
+  // QA found the report contradicting itself on one screen: the topic map
+  // called "The product rule" not started, while "Worth practising" on the
+  // same page listed it as costing wrong taps. Both were reading the same
+  // data. The dash is right — one or two answers is not a score — but the
+  // words beside it were describing a different student.
+  group('subtopic wording', () {
+    test('never opened is not started', () {
+      expect(subtopicWord(sub('untouched', looks: 0)), 'not started');
+    });
+
+    test('opened but not enough to score is JUST started', () {
+      // The bug. One and two looks both produce a null percentage, and the
+      // app called all three of these the same thing.
+      expect(subtopicWord(sub('once', looks: 1)), 'just started');
+      expect(subtopicWord(sub('twice', looks: 2)), 'just started');
+    });
+
+    test('the dash itself is unchanged, because that part was right', () {
+      // Still no percentage on a thin sample. Only the label moved.
+      expect(subtopicMastery(sub('once', looks: 1)), isNull);
+      expect(subtopicMastery(sub('untouched', looks: 0)), isNull);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Back
   // -------------------------------------------------------------------------
   //
