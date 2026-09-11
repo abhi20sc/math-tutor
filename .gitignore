@@ -73,3 +73,7 @@ supabase/.branches/
 # Flutter web build output (already covered by /build/, kept explicit
 # because it is 40 MB and gets committed by accident more than anything else)
 /build/
+
+# Promo footage. Rendered from real captures by tools the repo does not
+# own; the frames and the source GIF live in the scratchpad, not here.
+*.mp4

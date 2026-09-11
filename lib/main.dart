@@ -17122,7 +17122,13 @@ class ErrorView extends StatelessWidget {
 /// Five bands, traffic-signal style, worst to best. This is the uncle's
 /// mindmap palette adopted across the whole report: grey (not enough
 /// evidence) → orange (struggling) → yellow (developing) → light green
-/// (nearing) → green (mastered).
+/// (nearing) → green.
+///
+/// The top one has no name here on purpose. A Band is an ACCURACY reading
+/// and nothing more; what a student is told they have achieved is the
+/// Progress ladder's business, and it spells the top rung "Completed" only
+/// after weighing coverage too. This comment used to say "(mastered)",
+/// which is how that word kept leaking back into the interface.
 ///
 /// The server decides the band (report_payload), from FIRST-TRY RATE and
 /// never completion — a student who finished a unit by guessing has not
@@ -17888,14 +17894,24 @@ class ReportView extends StatelessWidget {
           const SizedBox(height: 30),
           const _SectionTitle('Your topic map'),
           const SizedBox(height: 4),
+          // This paragraph is the legend for everything below it, so it
+          // has to describe the rule the rows are ACTUALLY using. It did
+          // not: it still explained the old averaged unit percentage and
+          // still ended on "full green (mastered)", a word the app stopped
+          // using when the ladder replaced it. A legend that contradicts
+          // the thing it labels is worse than no legend, and it was sitting
+          // directly above six rows reading "just started".
           Text(
-            'A subtopic\'s percentage is the share you get right first time. '
-            'A unit\'s averages its subtopics, counting one you have not '
-            'practised yet as nothing — so it climbs as you work through the '
-            'whole unit instead of jumping to a single topic\'s score. Too '
-            'little practice to judge shows a dash, never a nought, because '
-            'those mean opposite things. Colours run orange (needs work) '
-            'through yellow and light green to full green (mastered).',
+            'A subtopic\'s percentage is the share you get right first time, '
+            'and it appears once you have answered enough of them to judge. '
+            'Too little practice to judge shows a dash, never a nought, '
+            'because those mean opposite things. The words weigh two things '
+            'at once: how much of a topic you have attempted, and how much '
+            'of it you get right first try. Completed is the only one that '
+            'needs both, every question you can open and at least 90% right '
+            'first time, which is why a topic can read Nearly there on a '
+            'perfect score. A unit takes the word of its weakest touched '
+            'subtopic, and is Completed only when all of them are.',
             style: TextStyle(fontSize: 12.5, height: 1.5, color: kInkSoft),
           ),
           const SizedBox(height: 14),

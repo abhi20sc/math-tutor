@@ -15,6 +15,7 @@
 // Server-side behaviour is covered by tests/test_ama.sql (212 checks) and
 // tests/test_sections.sql (55). This file covers what happens in the browser.
 
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -886,6 +887,48 @@ void main() {
       // The word the spec uses, not the one this app invented.
       expect(progressWord(Progress.completed), 'Completed');
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // The word that keeps coming back
+  // -------------------------------------------------------------------------
+  //
+  // "Mastered" has leaked into the interface twice now. First as the top
+  // band's name, attached to a two-question sample. Then again in the
+  // report's own legend, which went on describing the retired rule and
+  // ending on "full green (mastered)" while the rows beneath it read "just
+  // started" — a legend contradicting the thing it labels.
+  //
+  // Both times it was caught by looking at the screen rather than by a
+  // test, because no test could see a string constant. This one can.
+  test('no user-facing string says "Mastered"', () {
+    final src = File('lib/main.dart').readAsStringSync();
+
+    // Strip comments first. The word SHOULD survive in them: they explain
+    // why it was removed, and deleting that history would invite its
+    // return a third time.
+    final code = src
+        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '')
+        .split('\n')
+        .map((l) {
+          final i = l.indexOf('//');
+          if (i < 0) return l;
+          // Not a comment if the // sits inside a string, e.g. a URL.
+          final before = l.substring(0, i);
+          final quotes = "'".allMatches(before).length +
+              '"'.allMatches(before).length;
+          return quotes.isEven ? before : l;
+        })
+        .join('\n');
+
+    final offenders = RegExp(r"'[^']*[Mm]astered[^']*'")
+        .allMatches(code)
+        .map((m) => m.group(0))
+        .toList();
+
+    expect(offenders, isEmpty,
+        reason: 'The ladder says "Completed". These string literals still '
+            'say Mastered:\n${offenders.join('\n')}');
   });
 
   // -------------------------------------------------------------------------
