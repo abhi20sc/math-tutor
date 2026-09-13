@@ -530,7 +530,43 @@ of it is the architecture working.
 
 ---
 
-## 9. Known, and not fixed
+## 9. The Free plan will pause this site
+
+Checked against Supabase's own docs, 13 September 2026, because it is the one
+thing on this list that bites AFTER launch rather than before.
+
+**Free plan projects are paused after 7 days of low activity.** Supabase's
+wording: *"Typically a few user requests to the database each day over the
+previous week is enough to keep the project from being paused."* You get a
+warning email about a week ahead, then a second when it happens, and a
+90-day window to restore it.
+
+This is a launch problem specifically because of WHEN it hits. Once there
+are students working daily it will never trigger. The danger is the quiet
+fortnight right after launch, when a handful of people have signed up and
+nobody has been back yet — which is exactly when a dead site costs you the
+users you just got. A student who finds a broken app does not come back to
+check whether you fixed it.
+
+**Free plan projects also have no downloadable backup.** For a product
+holding children's practice history, the recovery story today is "hope
+nothing happens".
+
+Both are fixed by the Pro plan, which also turns on leaked-password
+protection (section 2) and gives access to support. That is the single
+decision on this page with a recurring cost attached, and it is the one
+worth making before a public launch rather than after the first incident.
+
+- [ ] Decide Free or Pro before announcing this anywhere public.
+- [ ] **Supabase ACCOUNT multi-factor auth** — not the app's admin account,
+      the Supabase login itself. It has administrative rights over the whole
+      project. If you sign in with GitHub, enable 2FA there.
+- [ ] Consider adding a second owner to the Supabase org, so losing one
+      account does not lose the project.
+
+---
+
+## 10. Known, and not fixed
 
 - **The report not scrolling.** QA saw it once, on a phone, and I have not
   reproduced it: a fixture built in exactly the real
