@@ -530,6 +530,82 @@ of it is the architecture working.
 
 ---
 
+## 8B. Public release: what changes when strangers can sign up
+
+Everything before this section gets the app safely in front of students you
+or your uncle know. This section is the difference between that and letting
+anyone on the internet create an account.
+
+The distinction is not politeness. A soft launch means you know who signed
+up, the volume is small, and the users are forgiving. Public means children
+you have no relationship with, people probing the signup form, and a legal
+exposure that is real rather than theoretical.
+
+### Legal, and one of these is a genuine blocker
+
+- [ ] **Name Resend in the privacy policy.** The policy names Supabase,
+      Cloudflare and Stripe. It does not name Resend, and the moment custom
+      SMTP is switched on, Resend processes guardians' email addresses on
+      your behalf. A processor handling children's guardians' data that is
+      not disclosed is the kind of gap that matters. **Do this in the same
+      sitting as the SMTP setup, before the first email goes out**, not
+      after.
+- [ ] Re-read the policy against what the app actually does now. It was
+      written before the crash table existed; `client_errors` stores a
+      redacted message, a stack and a student id for 90 days.
+- [x] Age gate, guardian consent, export-my-data and delete-my-account are
+      built and enforced by database triggers.
+
+### Abuse, at a volume you will not be watching
+
+- [ ] **CAPTCHA on signup, sign-in and password reset.** Supabase supports
+      this and the app has none. App-level rate limiting exists and stops a
+      fast attack from one address; it does not stop a slow distributed one,
+      and a public signup form for a children's product is worth protecting.
+- [ ] **Confirm email ON** (section 2). Without it anybody can create an
+      account on somebody else's address, which is tolerable among people
+      you know and is not tolerable in public.
+
+### If you put a custom domain in front of it
+
+Resend needs a domain you own to send to arbitrary addresses, so this is
+likely to happen at the same time. It is a chain, and missing a link looks
+like a broken app:
+
+1. Point the domain at Cloudflare Pages
+2. Verify it in Resend, set `REPORT_FROM` to an address at it
+3. Update `SITE_URL` to the new origin
+4. **Redeploy `create-checkout` and `stripe-webhook`** — CORS is locked to
+   `SITE_URL` and a browser on the new domain is refused until you do
+5. Add the new URL to Supabase Authentication -> URL Configuration
+6. Update the privacy policy and terms if they name the old URL
+
+### Proven, not merely built
+
+Everything in this app works in the sense that it does what the code says.
+None of the paths below has been exercised by a person who is not you.
+
+- [ ] One real card through Stripe, then refunded. There are zero paying
+      subscribers, so this path has never run once.
+- [ ] The guardian flow with a real second person on a real address, end to
+      end, including withdrawal.
+- [ ] The phone pass in section 5, including the report-scrolling re-test.
+
+### Someone has to be on the other end
+
+The app makes promises that only a person can keep.
+
+- [ ] Who reads `stemlabs.ca@gmail.com`, and how often? The contact sheet
+      promises "usually within a day".
+- [ ] Who runs `admin_recent_errors(7)`, and when? It is a table, not an
+      alert. Nobody is paged.
+- [ ] What happens when a parent emails asking you to delete their child's
+      data? `export_my_data` and `delete_my_account` exist and are the
+      student's to run. A parent asking on their behalf is a conversation,
+      and it needs an answer before it is asked.
+
+---
+
 ## 9. The Free plan will pause this site
 
 Checked against Supabase's own docs, 13 September 2026, because it is the one
