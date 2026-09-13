@@ -1,0 +1,51 @@
+# Keeps the Supabase project awake on the Free plan.
+#
+# Free projects are paused after 7 days of low activity. Supabase's wording:
+# "typically a few user requests to the database each day over the previous
+# week is enough to keep the project from being paused."
+#
+# That is never a problem once students are working daily. It is a problem in
+# the quiet fortnight after launch, when a handful of people have signed up
+# and nobody has been back yet — which is exactly when a dead site loses you
+# the users you just got. A student who finds a broken app does not return to
+# check whether it was fixed.
+#
+# This costs nothing: Actions minutes are unlimited on public repositories,
+# and the call is one read of a six-row table.
+#
+# DELETE THIS FILE if the project moves to Pro. Paid projects are never paused
+# for inactivity, and a cron nobody remembers is worse than no cron.
+
+name: keep-alive
+
+on:
+  schedule:
+    # 07:15 UTC daily. Deliberately not on the hour: GitHub's scheduler is
+    # busiest then and delays runs, and a delayed run is a missed day.
+    - cron: '15 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read one row, so the project counts as active
+        env:
+          # Not a secret. This is the PUBLISHABLE key — it is compiled into
+          # the web app and served to every browser that loads the site, so
+          # it is already public by design. Putting it in a GitHub secret
+          # would imply it is sensitive and mislead whoever reads this next.
+          # The service-role key is the one that must never appear here.
+          URL: https://frkswzowskeqmgdrrwab.supabase.co
+          KEY: sb_publishable_QGTakKcrvWfpTL3SRiT9uQ_mpxnP6Fn
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /tmp/out.json -w '%{http_code}' \
+            -X POST "$URL/rest/v1/rpc/list_courses" \
+            -H "apikey: $KEY" -H 'Content-Type: application/json' -d '{}')
+          echo "HTTP $code"
+          head -c 200 /tmp/out.json; echo
+          # A non-200 means the project is already paused, the key was
+          # rotated, or list_courses was revoked from anon. All three are
+          # worth a red tick in the Actions tab rather than a silent pass.
+          test "$code" = "200"

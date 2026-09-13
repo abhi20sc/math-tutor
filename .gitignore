@@ -77,3 +77,8 @@ supabase/.branches/
 # Promo footage. Rendered from real captures by tools the repo does not
 # own; the frames and the source GIF live in the scratchpad, not here.
 *.mp4
+
+# Database dumps. Real students' work - names, addresses, every answer.
+# This repository is public; these must never be in it.
+*.sql.gz
+astro-backups/

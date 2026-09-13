@@ -633,6 +633,31 @@ protection (section 2) and gives access to support. That is the single
 decision on this page with a recurring cost attached, and it is the one
 worth making before a public launch rather than after the first incident.
 
+### Staying on Free, deliberately
+
+Free is not the wrong choice here. The database is **17 MB of the 500 MB
+allowance**, and most of that is the question bank and the lessons, which do
+not grow. Attempts are what grow, at roughly a kilobyte each, so there is
+room for several hundred thousand of them before size is the constraint.
+What Free costs you is the three things below, and two of them now have a
+fix in this repository.
+
+- [x] **Pausing** — `.github/workflows/keep-alive.yml` reads one row a day.
+      Actions minutes are unlimited on public repositories, so this is free.
+      **Delete that file if you move to Pro**: paid projects are never paused,
+      and a cron nobody remembers is worse than no cron.
+- [x] **Backups** — `tools/backup.sh` takes a verified, gzipped dump you can
+      hold. Free takes daily backups but will not let you download them, so
+      without this the recovery story is "ask Supabase and hope". Run it
+      before anything risky and on some rhythm you will actually keep.
+      The dump is real students' work; the repo ignores `*.sql.gz` because
+      this repository is public.
+- [ ] **Leaked-password protection is Pro only and has no free substitute.**
+      Partly compensate with what Free does give you, on
+      `/auth/providers?provider=Email`: minimum length 8, and require digits,
+      lower case, upper case and symbols. That does nothing about a password
+      that is strong but already breached, which is the actual gap.
+
 - [ ] Decide Free or Pro before announcing this anywhere public.
 - [ ] **Supabase ACCOUNT multi-factor auth** — not the app's admin account,
       the Supabase login itself. It has administrative rights over the whole
